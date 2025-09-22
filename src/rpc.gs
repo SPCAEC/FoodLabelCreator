@@ -2,25 +2,45 @@
 
 /* ---------- Helpers ---------- */
 
-/** Normalize to a 12-digit UPC-A string (forgiving).
- *  - strips non-digits
- *  - if 13 digits starting with '0', drop the leading 0 (EAN-13 → UPC-A)
- *  - pads left if shorter (e.g., Sheets stored as number)
- *  - returns '' if impossible (>13 digits or empty)
- */
+// Normalize to a forgiving 12-digit UPC-A
 function normalizeUPC_(v) {
   let s = String(v == null ? '' : v).replace(/\D/g, '');
-  if (s.length === 13 && s.charAt(0) === '0') s = s.slice(1);
+  if (s.length === 13 && s.charAt(0) === '0') s = s.slice(1); // EAN-13 → UPC-A
   if (s.length > 13) return '';
-  if (s.length > 0 && s.length < 12) s = s.padStart(12, '0');
+  if (s.length > 0 && s.length < 12) s = s.padStart(12, '0');  // recover lost leading zeros
   return s.length === 12 ? s : '';
 }
 
-/** Map a sheet row object into the fields the UI expects, if needed. */
-function normalizeRecordForUI_(rec) {
-  // If your sheet columns already match (Species, Lifestage, Brand, ProductName, Recipe/Flavor, Ingredients, Treat/Food, UPC),
-  // you can just return rec. Otherwise, transform here.
-  return rec;
+// Open the configured sheet (from Script Properties)
+function getSheet_() {
+  const props = PropertiesService.getScriptProperties();
+  const sheetId   = props.getProperty('SHEET_ID')   || '';
+  const sheetName = props.getProperty('SHEET_NAME') || 'Products';
+  const ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActive();
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) throw new Error('Sheet not found: ' + sheetName);
+  return sh;
+}
+
+/** Scan the sheet for a row whose normalized UPC matches upc12; returns a record keyed by headers. */
+function findByUPCInSheet_(upc12) {
+  const sh = getSheet_();
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return null;
+
+  const headers = values[0].map(String);
+  const idxUPC = headers.indexOf('UPC');
+  if (idxUPC === -1) throw new Error('UPC column not found (header: UPC)');
+
+  for (let r = 1; r < values.length; r++) {
+    const cellNorm = normalizeUPC_(values[r][idxUPC]);
+    if (cellNorm === upc12) {
+      const rec = {};
+      headers.forEach((h, i) => rec[h] = values[r][i]);
+      return rec;
+    }
+  }
+  return null;
 }
 
 /* ---------- Lookup ---------- */
@@ -32,12 +52,12 @@ function apiLookup(payload) {
     const upc = normalizeUPC_(raw);
     if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
 
-    const rec = readByUPC(upc); // <- your existing function that looks up the row
+    const rec = findByUPCInSheet_(upc);
     if (!rec) return { found: false, upc };
 
-    return { found: true, upc, item: normalizeRecordForUI_(rec) };
+    return { found: true, upc, item: rec };
   } catch (e) {
-    // Surface a safe error without throwing (frontend treats found=false as "new item")
+    // Don’t throw; return a safe error for the client
     return { found: false, reason: 'exception', message: String(e && e.message || e) };
   }
 }
