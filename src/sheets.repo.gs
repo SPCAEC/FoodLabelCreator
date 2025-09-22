@@ -1,53 +1,81 @@
-/** sheets.repo.gs — UPC sheet repository */
-function _getSheet_() {
-  const ss = SpreadsheetApp.openById(CFG.SHEET_ID);
-  const sh = ss.getSheetByName(CFG.SHEET_NAME);
-  if (!sh) throw new Error(`Sheet "${CFG.SHEET_NAME}" not found`);
-  return sh;
-}
+/** Sheets read/write for UPC database */
+function sh_(){ return SpreadsheetApp.openById(CFG.SHEET_ID).getSheetByName(CFG.SHEET_NAME); }
 
-function _getHeaderMap_(sh) {
-  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+function getHeaders_(){
+  const row = sh_().getRange(1,1,1, sh_().getLastColumn()).getValues()[0];
   const map = {};
-  headers.forEach((h, i) => map[h] = i);
-  return { headers, map };
+  row.forEach((h,i)=> map[String(h).trim()] = i+1);
+  return map;
 }
 
-function lookupProductByUpc(upc) {
-  if (!upc) return null;
-  const sh = _getSheet_();
-  const { headers, map } = _getHeaderMap_(sh);
-  const values = sh.getRange(2, 1, Math.max(sh.getLastRow()-1,0), headers.length).getValues();
-  for (let r = 0; r < values.length; r++) {
-    const row = values[r];
-    if (String(row[map[COL.UPC]] || '') === String(upc)) {
-      return { rowIndex: r+2, data: _rowToObj_(row, headers) };
-    }
+function findRowByUPC_(upc){
+  const sh = sh_();
+  const data = sh.getDataRange().getValues();
+  const h = getHeaders_();
+  const col = h[COL.UPC];
+  for (let r=2; r<=data.length; r++){
+    if (String(data[r-1][col-1]).trim() === String(upc)) return r;
   }
-  return null;
+  return -1;
 }
 
-function _rowToObj_(row, headers) {
-  const obj = {};
-  headers.forEach((h, i) => obj[h] = row[i]);
-  return obj;
+function readByUPC(upc){
+  const sh = sh_(); const h = getHeaders_();
+  const r = findRowByUPC_(upc);
+  if (r === -1) return null;
+  const row = sh.getRange(r,1,1,sh.getLastColumn()).getValues()[0];
+  const val = k => row[h[k]-1] ?? '';
+  return {
+    upc: val(COL.UPC),
+    species: val(COL.SPECIES),
+    lifestage: val(COL.LIFESTAGE),
+    brand: val(COL.BRAND),
+    productName: val(COL.PRODUCT),
+    flavor: val(COL.FLAVOR),
+    type: val(COL.TYPE), // "Treat" or "Food"
+    ingredients: val(COL.INGREDIENTS),
+    pdfFileId: val(COL.PDF_FILE_ID),
+    pdfUrl: val(COL.PDF_URL),
+    frontPhotoId: val(COL.FRONT_PHOTO_ID),
+    ingPhotoId: val(COL.ING_PHOTO_ID),
+    _row: r,
+  };
 }
 
-function updateRow(rowIndex, dataObj) {
-  const sh = _getSheet_();
-  const { headers, map } = _getHeaderMap_(sh);
-  const row = headers.map(h => dataObj[h] !== undefined ? dataObj[h] : sh.getRange(rowIndex, map[h]+1).getValue());
-  row[map[COL.UPDATED_AT]] = new Date();
-  sh.getRange(rowIndex, 1, 1, headers.length).setValues([row]);
-}
-
-function appendRow(dataObj) {
-  const sh = _getSheet_();
-  const { headers, map } = _getHeaderMap_(sh);
-  const row = headers.map(h => dataObj[h] !== undefined ? dataObj[h] : '');
+function upsertRecord(payload){
+  const sh = sh_(); const h = getHeaders_();
+  const r = findRowByUPC_(payload.upc);
   const now = new Date();
-  if (map[COL.CREATED_AT] !== undefined) row[map[COL.CREATED_AT]] = now;
-  if (map[COL.UPDATED_AT] !== undefined) row[map[COL.UPDATED_AT]] = now;
-  sh.appendRow(row);
-  return sh.getLastRow();
+  const rowVals = [];
+  // Build row in header order
+  const headersOrdered = Object.keys(h).sort((a,b)=> h[a]-h[b]);
+  headersOrdered.forEach(head=>{
+    let v = '';
+    switch(head){
+      case COL.UPC: v = payload.upc; break;
+      case COL.SPECIES: v = payload.species; break;
+      case COL.LIFESTAGE: v = payload.lifestage; break;
+      case COL.BRAND: v = payload.brand; break;
+      case COL.PRODUCT: v = payload.productName; break;
+      case COL.FLAVOR: v = payload.flavor; break;
+      case COL.TYPE: v = payload.type; break;
+      case COL.INGREDIENTS: v = payload.ingredients; break;
+      case COL.PDF_FILE_ID: v = payload.pdfFileId || ''; break;
+      case COL.PDF_URL: v = payload.pdfUrl || ''; break;
+      case COL.FRONT_PHOTO_ID: v = payload.frontPhotoId || ''; break;
+      case COL.ING_PHOTO_ID: v = payload.ingPhotoId || ''; break;
+      case COL.CREATED_AT: v = r === -1 ? now : (readByUPC(payload.upc)?.createdAt || now); break;
+      case COL.UPDATED_AT: v = now; break;
+      default: v = '';
+    }
+    rowVals.push(v);
+  });
+
+  if (r === -1) {
+    sh.appendRow(rowVals);
+    return sh.getLastRow();
+  } else {
+    sh.getRange(r, 1, 1, rowVals.length).setValues([rowVals]);
+    return r;
+  }
 }

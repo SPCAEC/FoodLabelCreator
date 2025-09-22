@@ -1,0 +1,59 @@
+<section id="screenResults" class="screen hidden">
+  <div class="app">
+    <h1>Review & Expiration</h1>
+    <p class="subtitle">Review the information below and enter the expiration date for the label.</p>
+
+    <div class="row card">
+      <div class="field">
+        <label for="resExp">Expiration (mm/dd/yyyy)</label>
+        <input id="resExp" placeholder="mm/dd/yyyy" />
+        <div class="hint">Choose the 1st of the month if the exact day isn’t listed.</div>
+      </div>
+
+      <div class="actions">
+        <button id="resultsSave" class="btn" disabled>Save and Create Label</button>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Species</label>
+          <select id="resSpecies">
+            <option>Dog</option>
+            <option>Cat</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Lifestage</label>
+          <select id="resStage">
+            <option>Juvenile</option>
+            <option selected>Adult</option>
+            <option>Senior</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <input id="resBrand" />
+        </div>
+        <div class="field">
+          <label>Product Name</label>
+          <input id="resName" />
+        </div>
+        <div class="field">
+          <label>Recipe/Flavor</label>
+          <input id="resFlavor" />
+        </div>
+        <div class="field">
+          <label>Ingredients</label>
+          <textarea id="resIngredients" rows="6"></textarea>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn startover startOver">Start Over</button>
+      </div>
+
+      <div class="msg" id="resultsStatus" role="status"></div>
+      <div id="resultsLoad" class="spinner" hidden></div>
+    </div>
+  </div>
+</section>

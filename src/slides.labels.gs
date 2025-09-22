@@ -1,50 +1,54 @@
-/** slides.labels.gs — Placeholder mapping & PDF generation */
+/** Slides → PDF generator (food vs treat template) */
 
-function computeSpeciesLabel_(species, lifestage) {
-  const s = (String(species||'').trim().toLowerCase());
-  const l = (String(lifestage||'').trim().toLowerCase());
-  if (l === 'senior') return `Senior ${s === 'dog' ? 'Dog' : 'Cat'}`;
-  if (l === 'juvenile') return s === 'dog' ? 'Puppy' : 'Kitten';
-  // adult or blank → just species
-  return s === 'dog' ? 'Dog' : 'Cat';
+function buildSpeciesDisplay_(species, lifestage){
+  const s = String(species || '').trim();
+  const l = String(lifestage || '').trim().toLowerCase();
+  if (l === 'senior' && s) return `Senior ${s}`;
+  if (l === 'juvenile' && s.toLowerCase() === 'dog') return 'Puppy';
+  if (l === 'juvenile' && s.toLowerCase() === 'cat') return 'Kitten';
+  return s || '';
 }
 
-function generateLabelPdf_(record, expirationMMDDYYYY) {
-  // Decide template by Treat/Food
-  const isTreat = String(record[COL.TYPE] || '').toLowerCase() === 'treat';
-  const templateId = isTreat ? CFG.SLIDES_TREAT_ID : CFG.SLIDES_FOOD_ID;
+function generateLabelPDF_(payload){
+  const templateId = (String(payload.type).toLowerCase()==='treat')
+    ? CFG.SLIDES_TEMPLATE_TREAT_ID
+    : CFG.SLIDES_TEMPLATE_FOOD_ID;
 
-  // Copy template
-  const copy = DriveApp.getFileById(templateId).makeCopy(
-    `[TEMP] ${record[COL.BRAND] || ''} ${record[COL.PRODUCT] || ''} ${new Date().toISOString()}`,
-    DriveApp.getFolderById(CFG.PDF_FOLDER_ID) // temp location; we will move/export
-  );
+  const copy = DriveApp.getFileById(templateId).makeCopy(`Label_${payload.upc}_${Date.now()}`);
   const pres = SlidesApp.openById(copy.getId());
+  const body = pres.getSlides();
 
-  // Build replacements
-  const speciesLabel = computeSpeciesLabel_(record[COL.SPECIES], record[COL.LIFESTAGE]);
-  const map = new Map([
-    ['{{Species}}', speciesLabel],
-    ['{{Brand}}', record[COL.BRAND] || ''],
-    ['{{ProductName}}', record[COL.PRODUCT] || ''],
-    ['{{Flavor}}', record[COL.FLAVOR] || ''],
-    ['{{Expiration}}', expirationMMDDYYYY || ''],
-    ['{{Ingredients}}', record[COL.INGREDIENTS] || '']
-  ]);
+  const speciesDisplay = buildSpeciesDisplay_(payload.species, payload.lifestage);
 
-  // Replace placeholders
-  pres.getSlides().forEach(slide => {
-    map.forEach((val, key) => slide.replaceAllText(key, String(val)));
+  // Replace placeholders across all slides
+  body.forEach(sl=>{
+    replaceAllText_(sl, '{{Species}}', speciesDisplay);
+    replaceAllText_(sl, '{{Brand}}', payload.brand || '');
+    replaceAllText_(sl, '{{ProductName}}', payload.productName || '');
+    replaceAllText_(sl, '{{Flavor}}', payload.flavor || '');
+    replaceAllText_(sl, '{{Expiration}}', payload.expiration || ''); // mm/dd/yyyy passed from UI
+    replaceAllText_(sl, '{{Ingredients}}', payload.ingredients || '');
+    replaceAllText_(sl, '{{upc}}', payload.upc || ''); // if your template wants it
   });
 
-  // Export to PDF
-  const pdfBlob = DriveApp.getFileById(copy.getId()).getAs(MimeType.PDF);
-  const pdfFile = DriveApp.getFolderById(CFG.PDF_FOLDER_ID)
-    .createFile(pdfBlob)
-    .setName(`${record[COL.BRAND]||'Brand'}_${record[COL.PRODUCT]||'Product'}_${new Date().toISOString().replace(/[:.]/g,'-')}.pdf`);
+  pres.saveAndClose();
 
-  // Cleanup slide copy to avoid clutter
+  // Export to PDF
+  const blob = DriveApp.getFileById(copy.getId()).getAs('application/pdf');
+  const out = DriveApp.getFolderById(CFG.OUTPUT_PDF_FOLDER_ID).createFile(blob).setName(`Label_${payload.upc}_${Date.now()}.pdf`);
+  // Clean up slide copy
   DriveApp.getFileById(copy.getId()).setTrashed(true);
 
-  return { fileId: pdfFile.getId(), url: pdfFile.getUrl() };
+  return { fileId: out.getId(), url: `https://drive.google.com/uc?export=download&id=${out.getId()}` };
 }
+
+function replaceAllText_(slide, placeholder, value){
+  const shapes = slide.getPageElements();
+  shapes.forEach(el=>{
+    if (el.getPageElementType() === SlidesApp.PageElementType.SHAPE) {
+      const tf = el.asShape().getText();
+      const range = tf.find(placeholder);
+      if (range) tf.replaceAllText(placeholder, value);
+    }
+  });
+}}

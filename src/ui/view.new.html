@@ -1,0 +1,32 @@
+<section id="screenNew" class="screen hidden">
+  <div class="app">
+    <h1>New Item</h1>
+    <p class="subtitle">We’ll need two photos to create a new listing. First, take a clear photo of the full front of the bag/box/can.</p>
+
+    <div class="row card">
+      <div class="field">
+        <input id="frontInput" type="file" accept="image/*" capture="environment" hidden />
+        <button id="frontBtn" class="btn">Take Front Photo</button>
+        <img id="frontPreview" class="hidden" alt="Front Preview" style="margin-top:1rem; border-radius:12px; max-width:100%;" />
+      </div>
+
+      <div id="ingredientsBlock" class="field hidden" style="margin-top:1rem;">
+        <label>Now the ingredients label (good lighting, flat, in focus):</label>
+        <input id="ingInput" type="file" accept="image/*" capture="environment" hidden />
+        <button id="ingBtn" class="btn secondary">Take Ingredients Photo</button>
+        <img id="ingPreview" class="hidden" alt="Ingredients Preview" style="margin-top:1rem; border-radius:12px; max-width:100%;" />
+      </div>
+
+      <div class="actions">
+        <button id="nextToIngredients" class="btn hidden">Continue</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn startover startOver">Start Over</button>
+      </div>
+
+      <div class="msg" id="newStatus" role="status"></div>
+      <div id="newLoad" class="spinner" hidden></div>
+    </div>
+  </div>
+</section>

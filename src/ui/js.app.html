@@ -1,0 +1,480 @@
+<script>
+/**
+ * App state + screen controller
+ * - Kiosk-friendly UX, big buttons, explicit error messages
+ * - Launch → Lookup → (Results | New → Photos → Review) → Label → Done
+ * - Validates 12-digit UPC; integrates Scandit via Scanner.open()
+ */
+
+(function(){
+  // ------- DOM helpers -------
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  function show(id){
+    $$('.screen').forEach(s => s.classList.add('hidden'));
+    const el = document.getElementById(id);
+    if (el) { el.classList.remove('hidden'); window.scrollTo({top:0, behavior:'smooth'}); }
+  }
+  function setMsg(el, text, type){ 
+    el.textContent = text || '';
+    el.classList.remove('error','success');
+    if (type) el.classList.add(type);
+  }
+  function spinner(on, el){
+    if(!el) return;
+    el.hidden = !on;
+  }
+
+  // ------- Global state -------
+  const state = {
+    step: 'launch',
+    upc: '',
+    item: null,          // canonical object { Species, Lifestage, Brand, ProductName, Flavor, Ingredients, TreatFood }
+    exp: '',             // mm/dd/yyyy
+    photos: { front: null, ingredients: null }, // base64
+    pdf: { url: '', id: '' },
+    needs: { ingredients: false }
+  };
+
+  // ------- Validation -------
+  function isValidUPC(v){ return /^\d{12}$/.test(String(v || '').trim()); }
+  function isValidDate(v){ return /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v||'')); }
+
+  // ------- View wiring: Launch -------
+  function wireLaunch(){
+    const upcInput = $('#upcInput');
+    const lookupBtn = $('#lookupBtn');
+    const scanBtn = $('#scanBtn');
+    const startOverBtns = $$('.startOver');
+
+    const status = $('#launchStatus');
+    const load = $('#launchLoad');
+
+    function updateLookupBtn(){
+      lookupBtn.disabled = !isValidUPC(upcInput.value);
+    }
+
+    upcInput.addEventListener('input', () => {
+      // only numeric, max 12
+      upcInput.value = upcInput.value.replace(/\D/g,'').slice(0,12);
+      updateLookupBtn();
+    });
+
+    lookupBtn.addEventListener('click', async () => {
+      state.upc = upcInput.value;
+      await doLookup(status, load);
+    });
+
+    scanBtn.addEventListener('click', async () => {
+      setMsg(status, 'Opening camera…', null);
+      spinner(true, load);
+      try{
+        const upc = await Scanner.open();  // from js.scanner.html
+        state.upc = upc;
+        upcInput.value = upc;
+        updateLookupBtn();
+        setMsg(status, 'Scanned ✓ Looking up…', 'success');
+        await doLookup(status, load);
+      }catch(err){
+        if (String(err||'').includes('closed')) {
+          setMsg(status, 'Camera closed. You can type the UPC or try scanning again.', null);
+        } else {
+          console.error(err);
+          setMsg(status, 'Scan failed. Try again or type the UPC.', 'error');
+        }
+      }finally{
+        spinner(false, load);
+        try { Scanner.close(); } catch(e){}
+      }
+    });
+
+    startOverBtns.forEach(b => b.addEventListener('click', resetApp));
+  }
+
+  async function doLookup(statusEl, loadEl){
+    setMsg(statusEl, 'Looking up barcode…', null);
+    spinner(true, loadEl);
+    try{
+      const res = await API.lookup(state.upc);
+      if (res && res.found){
+        // Preload item and go to results screen
+        state.item = normalizeItemFromSheet(res.item || {});
+        state.step = 'results';
+        show('screenResults');
+        renderResults();
+      } else {
+        // Not found → New Item flow (front photo first)
+        state.item = null;
+        state.step = 'newItem';
+        show('screenNew');
+        renderNewItem();
+      }
+      setMsg(statusEl, '', null);
+    }catch(err){
+      console.error(err);
+      setMsg(statusEl, 'Lookup error. Please retry.', 'error');
+    }finally{
+      spinner(false, loadEl);
+    }
+  }
+
+  // ------- View: Results (found) -------
+  function renderResults(){
+    const status = $('#resultsStatus');
+    const load = $('#resultsLoad');
+
+    // Bind fields
+    const ddSpecies = $('#resSpecies');
+    const ddStage = $('#resStage');
+    const inBrand = $('#resBrand');
+    const inName = $('#resName');
+    const inFlavor = $('#resFlavor');
+    const taIngr = $('#resIngredients');
+    const exp = $('#resExp');
+
+    // Seed values
+    ddSpecies.value = (state.item?.Species || 'Dog');
+    ddStage.value = (state.item?.Lifestage || 'Adult');
+    inBrand.value = state.item?.Brand || '';
+    inName.value = state.item?.ProductName || '';
+    inFlavor.value = state.item?.Flavor || '';
+    taIngr.value = state.item?.Ingredients || '';
+    exp.value = state.exp || '';
+
+    // Enable/disable Save button based on exp
+    const saveBtn = $('#resultsSave');
+    function updateSave(){ saveBtn.disabled = !isValidDate(exp.value); }
+    exp.addEventListener('input', updateSave);
+    updateSave();
+
+    // Save + Create Label
+    saveBtn.onclick = async () => {
+      setMsg(status, 'Creating label…', null);
+      spinner(true, load);
+      // Capture edits back into state
+      state.item = {
+        Species: ddSpecies.value,
+        Lifestage: ddStage.value,
+        Brand: inBrand.value.trim(),
+        ProductName: inName.value.trim(),
+        Flavor: inFlavor.value.trim(),
+        Ingredients: taIngr.value.trim(),
+        TreatFood: state.item?.TreatFood || 'Food' // unchanged in found path
+      };
+      state.exp = exp.value;
+
+      try{
+        const payload = buildLabelPayload();
+        const res = await API.createLabels(payload);
+        if(res && res.pdfUrl){
+          state.pdf = { url: res.pdfUrl, id: res.fileId || '' };
+          setMsg(status, 'Label created ✓', 'success');
+          // Advance to done screen
+          state.step = 'done';
+          show('screenDone');
+          renderDone();
+        } else {
+          setMsg(status, 'Unexpected response while creating label.', 'error');
+        }
+      }catch(err){
+        console.error(err);
+        setMsg(status, 'Failed to create label. Please retry.', 'error');
+      }finally{
+        spinner(false, load);
+      }
+    };
+  }
+
+  // ------- View: New Item (photos + extraction) -------
+  function renderNewItem(){
+    const status = $('#newStatus');
+    const load = $('#newLoad');
+
+    const frontInput = $('#frontInput');
+    const frontBtn = $('#frontBtn');
+    const frontPreview = $('#frontPreview');
+
+    const nextBtn = $('#nextToIngredients'); // will appear after front success
+    const ingInput = $('#ingInput');
+    const ingBtn = $('#ingBtn');
+    const ingPreview = $('#ingPreview');
+
+    // reset
+    state.photos.front = null;
+    state.photos.ingredients = null;
+    state.needs.ingredients = false;
+    setMsg(status, 'We’ll capture the front first. Make it clear and readable.', null);
+    spinner(false, load);
+
+    function readAsBase64(file){
+      return new Promise((resolve,reject)=>{
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result));
+        r.onerror = reject;
+        r.readAsDataURL(file);
+      });
+    }
+
+    frontBtn.onclick = () => frontInput.click();
+    ingBtn.onclick = () => ingInput.click();
+
+    frontInput.onchange = async (e) => {
+      const f = e.target.files[0];
+      if(!f) return;
+      setMsg(status, 'Analyzing front photo…', null);
+      spinner(true, load);
+      try{
+        const base64 = await readAsBase64(f);
+        state.photos.front = base64;
+        frontPreview.src = base64;
+        frontPreview.classList.remove('hidden');
+
+        const ex = await API.extract(base64); // front only
+        // ex: { ok:true, item:{..partials}, needs:{ ingredients: true|false }, message? }
+        if (ex?.ok) {
+          state.item = normalizeItemFromAI(ex.item || {});
+          state.needs.ingredients = !!(ex.needs && ex.needs.ingredients);
+          if (state.needs.ingredients) {
+            setMsg(status, 'Great. Now capture the ingredients label.', null);
+            $('#ingredientsBlock').classList.remove('hidden');
+            nextBtn.classList.add('hidden');
+          } else {
+            setMsg(status, 'Front photo was enough. Proceed to ingredients capture or continue.', 'success');
+            $('#ingredientsBlock').classList.remove('hidden'); // still allow better OCR
+            nextBtn.classList.remove('hidden');
+          }
+        } else {
+          setMsg(status, ex?.message || 'Could not extract details. Try retaking the front photo.', 'error');
+        }
+      }catch(err){
+        console.error(err);
+        setMsg(status, 'Error reading or analyzing the front photo. Try again.', 'error');
+      }finally{
+        spinner(false, load);
+      }
+    };
+
+    ingInput.onchange = async (e) => {
+      const f = e.target.files[0];
+      if(!f) return;
+      setMsg(status, 'Reading ingredients…', null);
+      spinner(true, load);
+      try{
+        const base64 = await readAsBase64(f);
+        state.photos.ingredients = base64;
+        ingPreview.src = base64;
+        ingPreview.classList.remove('hidden');
+
+        const ex = await API.extract(state.photos.front, state.photos.ingredients);
+        if (ex?.ok) {
+          // prefer AI-provided ingredients if present
+          const merged = normalizeItemFromAI(ex.item || {});
+          // Merge with any existing front-derived fields
+          state.item = { ...state.item, ...merged, Ingredients: merged.Ingredients || state.item?.Ingredients || '' };
+          setMsg(status, 'Ingredients captured ✓', 'success');
+          nextBtn.classList.remove('hidden');
+        } else {
+          setMsg(status, ex?.message || 'Could not read ingredients. Try retaking the photo.', 'error');
+        }
+      }catch(err){
+        console.error(err);
+        setMsg(status, 'Error processing the ingredients photo.', 'error');
+      }finally{
+        spinner(false, load);
+      }
+    };
+
+    nextBtn.onclick = () => {
+      state.step = 'review';
+      show('screenReview');
+      renderReview();
+    };
+  }
+
+  // ------- View: Review (new item summary + required Treat/Food) -------
+  function renderReview(){
+    const status = $('#revStatus');
+    const load = $('#revLoad');
+
+    const ddSpecies = $('#revSpecies');
+    const ddStage = $('#revStage');
+    const inBrand = $('#revBrand');
+    const inName = $('#revName');
+    const inFlavor = $('#revFlavor');
+    const taIngr = $('#revIngredients');
+    const ddTF = $('#revTreatFood');
+    const exp = $('#revExp');
+    const saveBtn = $('#revSave');
+
+    // seeds (with sensibly-safe defaults)
+    ddSpecies.value = state.item?.Species || 'Dog';
+    ddStage.value = state.item?.Lifestage || 'Adult';
+    inBrand.value = state.item?.Brand || '';
+    inName.value = state.item?.ProductName || '';
+    inFlavor.value = state.item?.Flavor || '';
+    taIngr.value = state.item?.Ingredients || '';
+    ddTF.value = state.item?.TreatFood || '';
+    exp.value = state.exp || '';
+
+    function updateSave(){
+      saveBtn.disabled = !(ddTF.value && isValidDate(exp.value));
+    }
+    exp.addEventListener('input', updateSave);
+    ddTF.addEventListener('change', updateSave);
+    updateSave();
+
+    saveBtn.onclick = async () => {
+      // commit edits
+      state.item = {
+        Species: ddSpecies.value,
+        Lifestage: ddStage.value,
+        Brand: inBrand.value.trim(),
+        ProductName: inName.value.trim(),
+        Flavor: inFlavor.value.trim(),
+        Ingredients: taIngr.value.trim(),
+        TreatFood: ddTF.value
+      };
+      state.exp = exp.value;
+
+      setMsg(status, 'Saving and creating label…', null);
+      spinner(true, load);
+      try{
+        const payload = buildLabelPayload(true); // new item path
+        const res = await API.createLabels(payload);
+        if(res && res.pdfUrl){
+          state.pdf = { url: res.pdfUrl, id: res.fileId || '' };
+          setMsg(status, 'Label created ✓', 'success');
+          state.step = 'done';
+          show('screenDone');
+          renderDone();
+        }else{
+          setMsg(status, 'Unexpected response when creating label.', 'error');
+        }
+      }catch(err){
+        console.error(err);
+        setMsg(status, 'Failed to save or create the label. Please retry.', 'error');
+      }finally{
+        spinner(false, load);
+      }
+    };
+  }
+
+  // ------- View: Done (open PDF + start over) -------
+  function renderDone(){
+    const link = $('#pdfLink');
+    const msg = $('#doneMsg');
+    link.href = state.pdf.url || '#';
+    link.target = '_blank';
+    msg.textContent = state.pdf.url ? 'Labels created. Open the PDF in a new tab to print.' : 'No PDF URL returned.';
+  }
+
+  // ------- Utilities -------
+  function mmddyyyyToISO(mmddyyyy){
+    const [m,d,y] = (mmddyyyy||'').split('/');
+    if (!m||!d||!y) return null;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+
+  function deriveSpeciesPlaceholder(species, stage){
+    // Slide placeholder rules from requirements
+    const s = (species||'').toLowerCase();
+    const l = (stage||'').toLowerCase();
+    if (l === 'senior') return `Senior ${s === 'dog' ? 'Dog' : 'Cat'}`;
+    if (l === 'juvenile') return s === 'dog' ? 'Puppy' : 'Kitten';
+    // Adult or unspecified
+    return s === 'dog' ? 'Dog' : 'Cat';
+  }
+
+  function buildLabelPayload(isNew=false){
+    // Payload format for API.createLabels
+    const slideSpecies = deriveSpeciesPlaceholder(state.item.Species, state.item.Lifestage);
+    const treatFood = state.item.TreatFood || 'Food';
+    return {
+      upc: state.upc,
+      isNew,
+      sheetRecord: {
+        UPC: state.upc,
+        Species: state.item.Species,
+        Lifestage: state.item.Lifestage,
+        Brand: state.item.Brand,
+        ProductName: state.item.ProductName,
+        'Recipe/Flavor': state.item.Flavor,
+        'Treat/Food': treatFood,
+        Ingredients: state.item.Ingredients,
+        // Images are stored server-side if you implemented it that way
+      },
+      slides: {
+        placeholders: {
+          '{{Species}}': slideSpecies,
+          '{{Brand}}': state.item.Brand,
+          '{{ProductName}}': state.item.ProductName,
+          '{{Flavor}}': state.item.Flavor,
+          '{{Expiration}}': state.exp, // already mm/dd/yyyy
+          '{{Ingredients}}': state.item.Ingredients
+        },
+        templateKind: (treatFood === 'Treat') ? 'treat' : 'food'
+      },
+      photos: {
+        front: state.photos.front,         // base64 (optional if you store via RPC earlier)
+        ingredients: state.photos.ingredients
+      }
+    };
+  }
+
+  function normalizeItemFromSheet(row){
+    return {
+      Species: row.Species || '',
+      Lifestage: row.Lifestage || 'Adult',
+      Brand: row.Brand || '',
+      ProductName: row.ProductName || '',
+      Flavor: row['Recipe/Flavor'] || '',
+      Ingredients: row.Ingredients || '',
+      TreatFood: row['Treat/Food'] || 'Food'
+    };
+  }
+  function normalizeItemFromAI(obj){
+    // Accepts AI fields in various casings and normalizes
+    return {
+      Species: obj.Species || obj.species || '',
+      Lifestage: obj.Lifestage || obj.lifestage || 'Adult',
+      Brand: obj.Brand || obj.brand || '',
+      ProductName: obj.ProductName || obj.productName || obj.product_name || '',
+      Flavor: obj.Flavor || obj['Recipe/Flavor'] || obj.recipe || obj.flavor || '',
+      Ingredients: Array.isArray(obj.Ingredients) ? obj.Ingredients.join(', ')
+                  : (obj.Ingredients || obj.ingredients || '')
+    };
+  }
+
+  function resetApp(){
+    state.step = 'launch';
+    state.upc = '';
+    state.item = null;
+    state.exp = '';
+    state.photos = { front:null, ingredients:null };
+    state.pdf = { url:'', id:'' };
+    state.needs = { ingredients:false };
+
+    // clear inputs on Launch screen
+    const upc = $('#upcInput'); if (upc) upc.value = '';
+    const lookupBtn = $('#lookupBtn'); if (lookupBtn) lookupBtn.disabled = true;
+
+    show('screenLaunch');
+  }
+
+  // ------- Wire global nav buttons -------
+  function wireGlobal(){
+    $$('.startOver').forEach(b => b.addEventListener('click', resetApp));
+    // Close Camera while preview is open
+    const closeCam = $('#closeCamera');
+    if (closeCam) closeCam.onclick = () => { try{ Scanner.close(); }catch(e){} };
+  }
+
+  // ------- Entry -------
+  document.addEventListener('DOMContentLoaded', () => {
+    wireGlobal();
+    wireLaunch();
+    show('screenLaunch');
+  });
+
+})();
+</script>

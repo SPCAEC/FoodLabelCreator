@@ -1,0 +1,67 @@
+<section id="screenReview" class="screen hidden">
+  <div class="app">
+    <h1>Review & Expiration</h1>
+    <p class="subtitle">Review the information below and enter the expiration date for the label.</p>
+
+    <div class="row card">
+      <div class="field">
+        <label for="revExp">Expiration (mm/dd/yyyy)</label>
+        <input id="revExp" placeholder="mm/dd/yyyy" />
+        <div class="hint">Choose the 1st of the month if the exact day isn’t listed.</div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label>Species</label>
+          <select id="revSpecies">
+            <option>Dog</option>
+            <option>Cat</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Lifestage</label>
+          <select id="revStage">
+            <option>Juvenile</option>
+            <option selected>Adult</option>
+            <option>Senior</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Brand</label>
+          <input id="revBrand" />
+        </div>
+        <div class="field">
+          <label>Product Name</label>
+          <input id="revName" />
+        </div>
+        <div class="field">
+          <label>Recipe/Flavor</label>
+          <input id="revFlavor" />
+        </div>
+        <div class="field">
+          <label>Ingredients</label>
+          <textarea id="revIngredients" rows="6"></textarea>
+        </div>
+        <div class="field">
+          <label>Is this Food or a Treat?</label>
+          <select id="revTreatFood">
+            <option value="" selected>— Select —</option>
+            <option>Food</option>
+            <option>Treat</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="revSave" class="btn" disabled>Save and Create Label</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn startover startOver">Start Over</button>
+      </div>
+
+      <div class="msg" id="revStatus" role="status"></div>
+      <div id="revLoad" class="spinner" hidden></div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,30 @@
+<script>
+/** Client wrapper around google.script.run */
+const API = {
+  lookup(upc){
+    return new Promise((res,rej)=>{
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiLookup(upc);
+    });
+  },
+  saveAndCreateLabel(payload){
+    return new Promise((res,rej)=>{
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiSaveAndCreateLabel(payload);
+    });
+  },
+  uploadFront(upc, dataUrl){
+    return new Promise((res,rej)=>{
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiUploadFront(upc, dataUrl);
+    });
+  },
+  uploadIngredients(upc, dataUrl){
+    return new Promise((res,rej)=>{
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiUploadIngredients(upc, dataUrl);
+    });
+  },
+  extractFromImages(req){
+    return new Promise((res,rej)=>{
+      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiExtractFromImages(req);
+    });
+  }
+};
+</script>

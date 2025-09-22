@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1, user-scalable=no">
+  <title>Food Label Creator</title>
+  <!-- Scandit 7.6.1 (Core + Barcode). Requires configure() with license + library location. -->
+  <script src="https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-core@7.6.1/build/js/bundles/scandit-datacapture-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@7.6.1/build/js/bundles/scandit-datacapture-barcode.min.js"></script>
+</head>
+<body>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/css.kiosk').getContent(); ?>
+  <main class="app">
+    <header>
+      <h1>Food Label Creator</h1>
+      <p class="subtitle">Scan or enter a 12-digit UPC to create labels for pantry items.</p>
+    </header>
+
+    <div id="screen"></div>
+    <div id="toast" class="msg" role="status"></div>
+  </main>
+
+  <?!= HtmlService.createHtmlOutputFromFile('ui/js.api').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/js.scanner').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/js.app').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/view.launch').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/view.lookupresults').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/view.newitem').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/view.review').getContent(); ?>
+  <?!= HtmlService.createHtmlOutputFromFile('ui/view.done').getContent(); ?>
+</body>
+</html>
