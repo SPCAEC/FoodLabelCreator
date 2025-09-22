@@ -1,16 +1,19 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <base target="_top">
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
   <title>Food Label Creator</title>
+
+  <!-- App CSS (templated include) -->
+  <?!= include('ui/css.kiosk'); ?>
+
   <!-- Scandit 7.6.1 (Core + Barcode). Requires configure() with license + library location. -->
   <script src="https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-core@7.6.1/build/js/bundles/scandit-datacapture-core.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-barcode@7.6.1/build/js/bundles/scandit-datacapture-barcode.min.js"></script>
 </head>
 <body>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/css.kiosk').getContent(); ?>
   <main class="app">
     <header>
       <h1>Food Label Creator</h1>
@@ -18,16 +21,19 @@
     </header>
 
     <div id="screen"></div>
-    <div id="toast" class="msg" role="status"></div>
+    <div id="toast" class="msg" role="status" aria-live="polite"></div>
   </main>
 
-  <?!= HtmlService.createHtmlOutputFromFile('ui/js.api').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/js.scanner').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/js.app').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/view.launch').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/view.lookupresults').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/view.newitem').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/view.review').getContent(); ?>
-  <?!= HtmlService.createHtmlOutputFromFile('ui/view.done').getContent(); ?>
+  <!-- App scripts (templated includes; order matters) -->
+  <?!= include('ui/js.api'); ?>
+  <?!= include('ui/js.scanner'); ?>
+  <?!= include('ui/js.app'); ?>
+
+  <!-- Views -->
+  <?!= include('ui/view.launch'); ?>
+  <?!= include('ui/view.lookupresults'); ?>
+  <?!= include('ui/view.newitem'); ?>
+  <?!= include('ui/view.review'); ?>
+  <?!= include('ui/view.done'); ?>
 </body>
 </html>
