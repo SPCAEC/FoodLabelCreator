@@ -1,11 +1,15 @@
-/** Food Label Creator — Apps Script bootstrap */
+/** Code.gs — doGet and templating */
 function doGet() {
-  return HtmlService.createHtmlOutputFromFile('index')
+  const t = HtmlService.createTemplateFromFile('ui/Index');
+  t.CONFIG = {
+    enableScandit: CFG.ENABLE_SCANDIT,
+    scanditLicense: CFG.SCANDIT_LICENSE
+  };
+  return t.evaluate()
     .setTitle('Food Label Creator')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
 
-// Example server function (wire up later)
-function ping() {
-  return { ok: true, at: new Date().toISOString() };
+function include_(name) {
+  return HtmlService.createHtmlOutputFromFile(name).getContent();
 }
