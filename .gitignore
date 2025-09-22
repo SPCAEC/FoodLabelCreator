@@ -1,0 +1,14 @@
+# OS / editor
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# deps / builds
+node_modules/
+dist/
+build/
+
+# clasp / local caches
+.clasp-local.json
+.clasp-dev.json

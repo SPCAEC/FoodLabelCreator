@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+  <title>Food Label Creator</title>
+  <!-- We’ll drop in your kiosk CSS later; keeping this minimal for now -->
+  <style>
+    :root { --bg:#fff; --fg:#0f172a; --accent:#0ea5e9; }
+    body { margin:0; font-family:system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color:var(--fg); background:var(--bg); }
+    .app { max-width: 800px; margin: 2rem auto; padding: 1.25rem; }
+    button { padding:.8rem 1rem; border:0; border-radius:10px; background:var(--accent); color:#fff; font-weight:700; }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <h1>Food Label Creator</h1>
+    <p>Project scaffold ready. We’ll wire up UI and your kiosk CSS next.</p>
+    <button id="ping">Test Server</button>
+    <pre id="out"></pre>
+  </main>
+
+  <script>
+    document.getElementById('ping').addEventListener('click', () => {
+      google.script.run
+        .withSuccessHandler(res => {
+          document.getElementById('out').textContent = JSON.stringify(res, null, 2);
+        })
+        .withFailureHandler(err => {
+          document.getElementById('out').textContent = 'Error: ' + err;
+        })
+        .ping();
+    });
+  </script>
+</body>
+</html>

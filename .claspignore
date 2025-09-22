@@ -1,0 +1,22 @@
+# Ignore everything outside src automatically via rootDir,
+# but just in case anything slips in:
+**/*.ts
+**/*.tsx
+**/*.jsx
+**/*.map
+**/*.css
+**/*.scss
+**/*.sass
+**/*.md
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+**/*.svg
+**/*.pdf
+**/*.csv
+node_modules/**
+dist/**
+build/**
+.vscode/**
+.DS_Store
