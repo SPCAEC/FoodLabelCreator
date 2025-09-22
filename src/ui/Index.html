@@ -9,11 +9,12 @@
   <!-- Kiosk styles -->
   <?!= include('ui/css.kiosk'); ?>
 
-  <!-- Expose absolute base URL for same-origin references (if needed) -->
+  <!-- Expose absolute base URL for same-origin references -->
   <script>window.APP_BASE = "<?= baseUrl ?>";</script>
 
-  <!-- Inline Scandit bundle (Core+Barcode). Ensures window.Scandit is defined in GAS sandbox. -->
-  <script src="<?= baseUrl ?>?static=scandit-index"></script>
+  <!-- Inline Scandit bundle (Core+Barcode).
+       This comes from Code.gs → doGet → ?static=scandit-index -->
+  <script src="<?= baseUrl ?>?static=scandit-index&v=<?= cacheBust ?>"></script>
 </head>
 <body>
   <main class="app">

@@ -1,42 +1,48 @@
 <script>
 /**
- * Scandit Web (bundled) – inline global available as window.Scandit
- * - Early configure() with engineLocation (WASM from CDN)
- * - Built-in camera + recommended settings
- * - Retail symbologies (EAN-13/UPC-A, EAN-8, UPC-E) registered
- * - Reject unwanted scans in listener (accept UPC-A or EAN-13 starting 0)
+ * Scanner controller using Scandit (bundled) already loaded inline in Index.html.
+ * - Early configure() with engineLocation (WASM from CDN).
+ * - Uses built-in camera with recommended settings.
+ * - Registers retail symbologies: EAN-13/UPC-A, EAN-8, UPC-E.
+ * - Accepts UPC-A (12 digits) and EAN-13 with leading 0 (converted to UPC-A).
+ * - Rejects other scans in the listener, per Scandit guidance.
+ * - Exposes window.Scanner.open() / window.Scanner.close()
  */
 (function () {
+  // License pulled from Script Properties at render time
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
+
+  // Scandit engine (WASM) location per docs — CDN is fine for engine files
   const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/';
 
-  function S(){ return window.Scandit || null; }
-  function isDigits12(v){ return /^\d{12}$/.test(String(v||'')); }
-  function normalizeToUpcA(s){
-    const v = String(s||'').trim();
-    if (/^\d{12}$/.test(v)) return v;       // UPC-A
-    if (/^0\d{12}$/.test(v)) return v.slice(1); // EAN-13 -> UPC-A
+  // ---- tiny helpers ----
+  const S = () => window.Scandit || null;
+  const isDigits12 = v => /^\d{12}$/.test(String(v || ''));
+  const normalizeToUpcA = s => {
+    const v = String(s || '').trim();
+    if (/^\d{12}$/.test(v)) return v;           // UPC-A
+    if (/^0\d{12}$/.test(v)) return v.slice(1); // EAN-13 with leading 0 → UPC-A
     return '';
-  }
+  };
 
-  // --- Early configure (per docs) ---
+  // ---- early configure (per docs) ----
   document.addEventListener('DOMContentLoaded', async () => {
     try {
       if (!S()) throw new Error('Scandit global missing');
       await S().configure(LICENSE, { engineLocation: ENGINE_URL });
       console.log('[Scanner] configured OK');
     } catch (e) {
-      console.warn('[Scanner] early configure failed:', e?.message || e);
+      console.warn('[Scanner] early configure failed:', e && e.message ? e.message : e);
     }
   });
 
-  // --- UI helpers ---
-  async function promptFallback(){
+  // ---- UI helpers ----
+  async function promptFallback() {
     const v = window.prompt('Enter 12-digit UPC');
     if (!isDigits12(v)) throw new Error('closed');
     return String(v).trim();
   }
-  function buildModal(){
+  function buildModal() {
     const root = document.createElement('div');
     root.id = 'scanModal';
     root.className = 'card camera';
@@ -44,50 +50,55 @@
       <div id="scanView" style="width:100%;height:65vh;border-radius:16px;overflow:hidden;"></div>
       <div class="actions" style="margin-top:.75rem;">
         <button class="btn ghost" id="closeScanBtn" type="button">Close Camera</button>
-      </div>`;
+      </div>
+    `;
     (document.querySelector('#screen') || document.body).prepend(root);
     return root;
   }
 
-  // --- Scanner state ---
+  // ---- scanner state ----
   let context, view, camera, barcodeCapture;
 
   async function open() {
     try {
       if (!S()) throw new Error('Scandit global missing');
-      // If configure during DOMContentLoaded failed (e.g., license empty) try again here:
-      try { await S().configure(LICENSE, { engineLocation: ENGINE_URL }); } catch(_) {}
+      // If early configure failed (e.g., license not ready), retry here to be safe.
+      try { await S().configure(LICENSE, { engineLocation: ENGINE_URL }); } catch (_) {}
 
       return new Promise(async (resolve, reject) => {
         try {
+          // One-time init
           if (!context) {
             context = await S().DataCaptureContext.create();
             view    = await S().DataCaptureView.create(context);
             camera  = S().Camera.default;
 
-            // Recommended camera settings (per docs)
+            // Recommended camera settings for BarcodeCapture
             const cs = S().BarcodeCapture.recommendedCameraSettings;
             await camera.applySettings(cs);
             await context.setFrameSource(camera);
 
-            // Enable retail symbologies
+            // Register symbologies
             const settings = new S().BarcodeCaptureSettings();
             settings.enableSymbologies([
               S().Symbology.ean13Upca,  // EAN-13 + UPC-A
-              S().Symbology.ean8,       // registered, currently rejected in logic
-              S().Symbology.upce        // registered, currently rejected in logic
+              S().Symbology.ean8,       // registered; currently rejected in logic
+              S().Symbology.upce        // registered; currently rejected in logic
             ]);
-            settings.codeDuplicateFilter = 1000; // ms
+            settings.codeDuplicateFilter = 1000; // ms: ignore duplicates briefly
             barcodeCapture = await S().BarcodeCapture.create(context, settings);
 
+            // Overlay / viewfinder
             const overlay = S().BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
             overlay.viewfinder = new S().RectangularViewfinder();
           }
 
+          // Modal host + attach view
           const modal = buildModal();
           const mount = modal.querySelector('#scanView');
           await view.connectToElement(mount);
 
+          // Listener that REJECTS unwanted scans; resolves with normalized UPC-A
           const listener = {
             didScan: async (_, session) => {
               const list = session.newlyRecognizedBarcodes || [];
@@ -102,7 +113,7 @@
                   normalized = normalizeToUpcA(data);
                   accept = !!normalized;
                 } else if (sym === S().Symbology.ean8 || sym === S().Symbology.upce) {
-                  accept = false; // TODO: implement proper expansion if we want to accept
+                  accept = false; // keep rejected until expansion logic is added
                 }
 
                 if (!accept) {
@@ -111,8 +122,9 @@
                   continue;
                 }
 
-                try { await barcodeCapture.setEnabled(false); } catch(e){}
-                try { await camera.switchToDesiredState(S().FrameSourceState.Off); } catch(e){}
+                // Accept: stop capture, power off camera, resolve
+                try { await barcodeCapture.setEnabled(false); } catch (_) {}
+                try { await camera.switchToDesiredState(S().FrameSourceState.Off); } catch (_) {}
                 close();
                 return resolve(normalized);
               }
@@ -120,32 +132,35 @@
           };
           await barcodeCapture.addListener(listener);
 
+          // Start camera + capture
           await camera.switchToDesiredState(S().FrameSourceState.On);
           await barcodeCapture.setEnabled(true);
 
+          // Close button
           modal.querySelector('#closeScanBtn').onclick = () => {
             close();
             reject(new Error('closed'));
           };
         } catch (err) {
           console.error('[Scanner] init error:', err);
-          try { close(); } catch(_){}
-          try { resolve(await promptFallback()); } catch(_) { reject(err); }
+          try { close(); } catch (_) {}
+          try { resolve(await promptFallback()); } catch (_) { reject(err); }
         }
       });
     } catch (e) {
-      console.error('[Scanner] bundled not available:', e?.message || e);
+      console.error('[Scanner] bundled not available:', e && e.message ? e.message : e);
       return promptFallback();
     }
   }
 
   function close() {
-    try { barcodeCapture && barcodeCapture.setEnabled(false); } catch(_){}
-    try { camera && S() && camera.switchToDesiredState(S().FrameSourceState.Off); } catch(_){}
+    try { barcodeCapture && barcodeCapture.setEnabled(false); } catch (_) {}
+    try { camera && S() && camera.switchToDesiredState(S().FrameSourceState.Off); } catch (_) {}
     const modal = document.getElementById('scanModal');
     if (modal) modal.remove();
   }
 
+  // Public API
   window.Scanner = { open, close };
 })();
 </script>

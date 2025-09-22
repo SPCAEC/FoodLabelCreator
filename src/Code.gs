@@ -1,68 +1,27 @@
-/** Food Label Creator — Web App bootstrap + static proxy + APIs */
+/** Food Label Creator — Web App bootstrap + APIs + inline Scandit bundle */
 
 /* ------------------------------------------------------------------ */
-/*  SAME-ORIGIN STATIC PROXY (Scandit bundled JS only)                 */
-/*  We proxy ONLY the JS bundle to avoid ORB/CSP blocking of <script>. */
-/*  The engineLocation (WASM files) will still be fetched from Scandit */
-/*  CDN by the SDK at runtime.                                         */
+/*  Inline Scandit bundle (Core+Barcode)                               */
+/*  - Fetches the bundled JS and escapes </script> so inline execution */
+/*    cannot be terminated early by the browser.                       */
+/*  - Guarantees window.Scandit is defined before js.scanner runs.     */
 /* ------------------------------------------------------------------ */
-const SCANDIT_BUNDLED_JS =
-  'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
-
-function serveScanditBundled_() {
-  const res  = UrlFetchApp.fetch(SCANDIT_BUNDLED_JS, {
-    muteHttpExceptions: true,
-    followRedirects: true,
-  });
-  const code = res.getResponseCode();
-
-  console.log(JSON.stringify({
-    level: 'info',
-    msg: 'static fetch',
-    from: SCANDIT_BUNDLED_JS,
-    status: code,
-  }));
-
-  if (code !== 200) {
-    return ContentService
-      .createTextOutput('/* failed to fetch Scandit bundle: ' + code + ' */')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-
-  return ContentService
-    .createTextOutput(res.getContentText('UTF-8'))
-    .setMimeType(ContentService.MimeType.JAVASCRIPT)        // IMPORTANT: execute as JS
-    .setHeader('Cache-Control', 'public, max-age=31536000'); // cache hard; bump version to bust
-}
-
-// Inline the Scandit bundled JS (Core+Barcode) so it evaluates in-page and sets window.Scandit.
 function scanditBundleInline() {
   const url = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
   const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
   const code = res.getResponseCode();
   console.log(JSON.stringify({ level: 'info', msg: 'inline scandit fetch', url, status: code }));
   if (code !== 200) return '/* failed to fetch Scandit bundle: ' + code + ' */';
-  return res.getContentText('UTF-8');
+  // IMPORTANT: prevent premature </script> termination in inline context
+  return res.getContentText('UTF-8').replace(/<\/script>/gi, '<\\/script>');
 }
 
 /* ------------------------------------------------------------------ */
-/*  doGet router                                                       */
-/*  - ?static=scandit-index  -> serves Scandit bundled JS (same-origin)*/
-/*  - otherwise: render app HTML (and expose baseUrl to client)        */
+/*  doGet: render app HTML and expose baseUrl (optional)               */
 /* ------------------------------------------------------------------ */
 function doGet(e) {
-  const p = e && e.parameter && e.parameter.static;
-  if (p) {
-    if (p === 'scandit-index') return serveScanditBundled_();
-    // Unknown static path -> neutral JS response
-    return ContentService
-      .createTextOutput('/* unknown static route */')
-      .setMimeType(ContentService.MimeType.JAVASCRIPT);
-  }
-
   const tpl = HtmlService.createTemplateFromFile('ui/Index');
   tpl.cacheBust = Date.now();
-  // Expose absolute base URL so client can build same-origin URLs
   try { tpl.baseUrl = ScriptApp.getService().getUrl() || ''; }
   catch (_) { tpl.baseUrl = ''; }
 
@@ -100,29 +59,29 @@ function apiLookup(payload) {
   const sheetName = props.getProperty('SHEET_NAME') || 'Products';
 
   if (!upc) {
-    return { found: false, reason: 'invalid_length', sent: String(raw || ''), __ver: 'v6' };
+    return { found: false, reason: 'invalid_length', sent: String(raw || ''), __ver: 'v7' };
   }
 
   let ss, sh;
   try {
     ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActive();
   } catch (e) {
-    return { found: false, reason: 'sheet_open_failed', detail: String(e), __ver: 'v6' };
+    return { found: false, reason: 'sheet_open_failed', detail: String(e), __ver: 'v7' };
   }
   sh = ss.getSheetByName(sheetName);
   if (!sh) {
-    return { found: false, reason: 'sheet_not_found', sheetName, __ver: 'v6' };
+    return { found: false, reason: 'sheet_not_found', sheetName, __ver: 'v7' };
   }
 
   const values = sh.getDataRange().getValues();
   if (values.length < 2) {
-    return { found: false, reason: 'empty_sheet', rows: values.length, __ver: 'v6' };
+    return { found: false, reason: 'empty_sheet', rows: values.length, __ver: 'v7' };
   }
 
   const headers = values[0].map(String);
   const idxUPC = headers.indexOf('UPC');
   if (idxUPC === -1) {
-    return { found: false, reason: 'upc_header_missing', headers, expect: 'UPC', __ver: 'v6' };
+    return { found: false, reason: 'upc_header_missing', headers, expect: 'UPC', __ver: 'v7' };
   }
 
   const samples = [];
@@ -144,9 +103,9 @@ function apiLookup(payload) {
       reason: 'not_found',
       samples,
       sheet: { id: sheetId || '(active)', name: sheetName, header: 'UPC' },
-      __ver: 'v6'
+      __ver: 'v7'
     };
   }
 
-  return { found: true, upc, item: hit, __ver: 'v6' };
+  return { found: true, upc, item: hit, __ver: 'v7' };
 }
