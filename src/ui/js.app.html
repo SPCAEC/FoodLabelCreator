@@ -92,6 +92,7 @@
     });
 
     startOverBtns.forEach(b => b.addEventListener('click', resetApp));
+    spinner(false, load);  // ensure hidden on page load
   }
 
   async function doLookup(statusEl, loadEl){
