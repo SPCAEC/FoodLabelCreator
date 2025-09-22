@@ -13,7 +13,7 @@
   <script>window.APP_BASE = "<?= baseUrl ?>";</script>
 
   <!-- Inline Scandit bundle (Core+Barcode). Ensures window.Scandit is defined in GAS sandbox. -->
-  <script><?!= scanditBundleInline() ?></script>
+  <script src="<?= baseUrl ?>?static=scandit-index"></script>
 </head>
 <body>
   <main class="app">
