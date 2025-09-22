@@ -1,0 +1,40 @@
+<!-- Launch / Home screen -->
+<section id="view-launch" class="screen">
+  <div class="card">
+    <h2 class="h">Start a label</h2>
+    <p class="t">Scan a barcode or enter a 12-digit UPC to look up or create a product label.</p>
+
+    <div class="row">
+      <div class="field">
+        <label for="upcInput">UPC</label>
+        <input id="upcInput" inputmode="numeric" pattern="[0-9]*" maxlength="14" placeholder="e.g. 012345678905" autocomplete="off">
+        <div class="hint">Numbers only — we’ll ignore spaces/dashes.</div>
+      </div>
+    </div>
+
+    <div class="row actions">
+      <button id="scanBtn" class="btn" type="button">Scan Barcode</button>
+      <button id="lookupBtn" class="btn secondary" type="button">Lookup</button>
+      <button id="clearBtn" class="btn secondary" type="button">Clear</button>
+    </div>
+
+    <!-- Live scanner mount (hidden until scanning starts) -->
+    <div id="scannerSection" class="camera hidden" aria-hidden="true">
+      <div id="scannerMount" class="preview"></div>
+      <div class="actions">
+        <button id="stopScanBtn" class="btn secondary" type="button">Stop Scanning</button>
+      </div>
+    </div>
+
+    <div class="msg info" id="launchInfo" role="status" aria-live="polite" hidden></div>
+    <div class="msg error" id="launchError" role="alert" hidden></div>
+  </div>
+
+  <div class="card">
+    <h3 class="h">Tips</h3>
+    <ul class="t">
+      <li>If scanning struggles, type the UPC and tap <em>Lookup</em>.</li>
+      <li>We’ll auto-detect common EAN-13/UPC-A formats.</li>
+    </ul>
+  </div>
+</section>
