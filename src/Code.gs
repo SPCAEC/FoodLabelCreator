@@ -6,7 +6,7 @@
 
 /** App bootstrap */
 function doGet(e) {
-  const tpl = HtmlService.createTemplateFromFile('Index.html'); // root HTML template
+  const tpl = HtmlService.createTemplateFromFile('ui/Index'); // root HTML template
   tpl.cacheBust = Date.now();
   return tpl
     .evaluate()
