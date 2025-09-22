@@ -6,22 +6,31 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
   <title>Food Label Creator</title>
 
-  <!-- App CSS (templated include) -->
+  <!-- Kiosk styles -->
   <?!= include('ui/css.kiosk'); ?>
-  <script>window.APP_BASE="<?= baseUrl ?>";</script>
+
+  <!-- Expose absolute base URL for same-origin references (if needed) -->
+  <script>window.APP_BASE = "<?= baseUrl ?>";</script>
+
+  <!-- Inline Scandit bundle (Core+Barcode). Ensures window.Scandit is defined in GAS sandbox. -->
+  <script><?!= scanditBundleInline() ?></script>
 </head>
 <body>
   <main class="app">
     <header>
       <h1>Food Label Creator</h1>
-      <p class="subtitle">Welcome to the Food Label Creator Application, provided by the SPCA Serving Erie County. Follow the steps below to search for or create pet food labels.</p>
+      <p class="subtitle">
+        Welcome to the Food Label Creator Application, provided by the SPCA Serving Erie County.
+        Follow the steps below to search for or create pet food labels.
+      </p>
     </header>
 
+    <!-- Screen host + live region -->
     <div id="screen"></div>
     <div id="toast" class="msg" role="status" aria-live="polite"></div>
   </main>
 
-  <!-- App scripts (templated includes; order matters) -->
+  <!-- App scripts (order matters) -->
   <?!= include('ui/js.api'); ?>
   <?!= include('ui/js.scanner'); ?>
   <?!= include('ui/js.app'); ?>

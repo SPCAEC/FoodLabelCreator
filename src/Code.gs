@@ -35,6 +35,16 @@ function serveScanditBundled_() {
     .setHeader('Cache-Control', 'public, max-age=31536000'); // cache hard; bump version to bust
 }
 
+// Inline the Scandit bundled JS (Core+Barcode) so it evaluates in-page and sets window.Scandit.
+function scanditBundleInline() {
+  const url = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
+  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+  const code = res.getResponseCode();
+  console.log(JSON.stringify({ level: 'info', msg: 'inline scandit fetch', url, status: code }));
+  if (code !== 200) return '/* failed to fetch Scandit bundle: ' + code + ' */';
+  return res.getContentText('UTF-8');
+}
+
 /* ------------------------------------------------------------------ */
 /*  doGet router                                                       */
 /*  - ?static=scandit-index  -> serves Scandit bundled JS (same-origin)*/
