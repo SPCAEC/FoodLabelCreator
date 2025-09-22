@@ -1,19 +1,16 @@
 <script>
 /**
- * Scandit 7.6.1 camera scanner with dynamic loader
+ * Scandit 7.6.1 (bundled) camera scanner
  * Exposes: window.Scanner.open() -> Promise<string>, window.Scanner.close()
  */
 (function () {
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
 
-  // Correct CDN bundle + engine paths (unscoped packages)
-  const CORE_JS   = "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-core@7.6.1/build/js/bundles/scandit-datacapture-core.min.js";
-  const BARCODE_JS= "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-barcode@7.6.1/build/js/bundles/scandit-datacapture-barcode.min.js";
-  const ENGINE    = "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-core@7.6.1/build/engine/";
+  // Bundled build (Core + Barcode in one file)
+  const BUNDLED_JS = "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js";
+  const ENGINE     = "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/";
 
-  function getSDK() {
-    return window.ScanditSDK || window.Scandit || window.scandit || null;
-  }
+  function SDK() { return window.Scandit || null; }
 
   function isValidUPC(v){ return /^\d{12}$/.test(String(v||'').trim()); }
   async function promptFallback(){
@@ -33,48 +30,35 @@
     });
   }
 
-  async function ensureSDKLoaded(){
-    // If already present, done
-    if (getSDK()) return;
-
-    // Try loading Core then Barcode
-    try {
-      await loadScript(CORE_JS);
-      await loadScript(BARCODE_JS);
-    } catch (e) {
-      console.error('[Scanner] SDK script load error:', e && e.message ? e.message : e);
-      throw e;
-    }
-
-    if (!getSDK()) {
-      throw new Error('Scandit SDK global not found after loading scripts');
-    }
+  async function ensureSDK(){
+    if (SDK()) return;
+    await loadScript(BUNDLED_JS);
+    if (!SDK()) throw new Error('Scandit global not found after loading bundled script');
   }
 
   let context, view, camera, barcodeCapture;
 
   async function initScandit() {
-    const SDK = getSDK();
-    if (!SDK) throw new Error('Scandit SDK not loaded');
+    const S = SDK();
+    if (!S) throw new Error('Scandit SDK not loaded');
 
     if (!context) {
-      await SDK.configure(LICENSE, { engineLocation: ENGINE });
+      await S.configure(LICENSE, { engineLocation: ENGINE });
 
-      context = await SDK.DataCaptureContext.create();
-      view    = await SDK.DataCaptureView.create(context);
+      context = await S.DataCaptureContext.create();
+      view    = await S.DataCaptureView.create(context);
 
-      camera  = SDK.Camera.default;
+      camera  = S.Camera.default;
       await context.setFrameSource(camera);
 
-      const settings = new SDK.BarcodeCaptureSettings();
-      settings.enableSymbologies([SDK.Symbology.ean13Upca]);
+      const settings = new S.BarcodeCaptureSettings();
+      settings.enableSymbologies([S.Symbology.ean13Upca]);
 
-      barcodeCapture = await SDK.BarcodeCapture.create(context, settings);
-
-      const overlay = SDK.BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
-      overlay.viewfinder = new SDK.RectangularViewfinder();
+      barcodeCapture = await S.BarcodeCapture.create(context, settings);
+      const overlay = S.BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
+      overlay.viewfinder = new S.RectangularViewfinder();
     }
-    return { SDK, context, view, camera, barcodeCapture };
+    return { S, context, view, camera, barcodeCapture };
   }
 
   function buildModal() {
@@ -92,27 +76,23 @@
   }
 
   async function open() {
-    // No license? fall back to prompt
     if (!LICENSE) {
-      console.warn('[Scanner] Missing SCANDIT_LICENSE, using prompt fallback');
+      console.warn('[Scanner] Missing SCANDIT_LICENSE; using prompt fallback');
       return promptFallback();
     }
 
-    // Make sure the SDK is actually present (load it if not)
-    try {
-      await ensureSDKLoaded();
-    } catch (e) {
-      console.warn('[Scanner] SDK unavailable; using prompt fallback');
+    try { await ensureSDK(); }
+    catch (e) {
+      console.error('[Scanner] Bundled script load error:', e?.message || e);
       return promptFallback();
     }
 
     return new Promise(async (resolve, reject) => {
       try {
-        const { SDK } = await initScandit();
+        const { S } = await initScandit();
 
         const modal = buildModal();
         const mount = modal.querySelector('#scanView');
-
         await view.connectToElement(mount);
 
         const listener = {
@@ -121,7 +101,7 @@
             if (newly.length) {
               const code = newly[0].data;
               try { await barcodeCapture.setEnabled(false); } catch(e){}
-              try { await camera.switchToDesiredState(SDK.FrameSourceState.Off); } catch(e){}
+              try { await camera.switchToDesiredState(S.FrameSourceState.Off); } catch(e){}
               close();
               resolve(code);
             }
@@ -129,7 +109,7 @@
         };
         await barcodeCapture.addListener(listener);
 
-        await camera.switchToDesiredState(SDK.FrameSourceState.On);
+        await camera.switchToDesiredState(S.FrameSourceState.On);
         await barcodeCapture.setEnabled(true);
 
         modal.querySelector('#closeScanBtn').onclick = () => {
@@ -139,17 +119,15 @@
       } catch (err) {
         console.error('[Scanner] init error:', err);
         try { close(); } catch(e){}
-        // last-resort fallback so volunteers can still proceed
-        try { resolve(await promptFallback()); }
-        catch(e){ reject(err); }
+        try { resolve(await promptFallback()); } catch(e){ reject(err); }
       }
     });
   }
 
   function close() {
-    const SDK = getSDK();
+    const S = SDK();
     try { barcodeCapture && barcodeCapture.setEnabled(false); } catch(e){}
-    try { camera && SDK && camera.switchToDesiredState(SDK.FrameSourceState.Off); } catch(e){}
+    try { camera && S && camera.switchToDesiredState(S.FrameSourceState.Off); } catch(e){}
     const modal = document.getElementById('scanModal');
     if (modal) modal.remove();
   }
