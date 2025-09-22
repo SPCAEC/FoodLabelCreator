@@ -24,8 +24,13 @@
     if (type) el.classList.add(type);
   }
   function spinner(on, el){
-    if(!el) return;
-    el.hidden = !on;
+  if (!el) return;
+
+  // Toggle the hidden attribute
+  el.toggleAttribute('hidden', !on);
+
+  // Force the style so CSS order can’t override it
+  el.style.display = on ? 'inline-block' : 'none';
   }
 
   // ------- Global state -------
