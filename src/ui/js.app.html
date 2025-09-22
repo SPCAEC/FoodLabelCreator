@@ -10,6 +10,11 @@
   // ------- DOM helpers -------
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
+  function requireEl(id){
+  const el = document.getElementById(id);
+  if (!el) { console.error(`[requireEl] Missing #${id}`); }
+  return el;
+  }
   function navigate(id){
   $$('.screen').forEach(s => s.classList.remove('active'));
   const el = document.getElementById(id);
@@ -120,30 +125,67 @@
     spinner(true, loadEl);
     try{
       const res = await API.lookup(state.upc);
-      if (res && res.found){
-        // Preload item and go to results screen
+      console.log('[lookup] sent:', state.upc, 'response:', res);
+
+      if (res && res.found === true) {
+        // Verify Results screen exists before rendering
+        if (!requireEl('screenResults')) {
+          setMsg(statusEl, 'Results view is missing in the DOM.', 'error');
+          return;
+        }
         state.item = normalizeItemFromSheet(res.item || {});
         state.step = 'results';
         navigate('screenResults');
-        renderResults();
-      } else {
-        // Not found → New Item flow (front photo first)
-        state.item = null;
-        state.step = 'newItem';
-        navigate('screenNew');
-        renderNewItem();
+        // Defer render to next tick so the DOM/state is settled
+        setTimeout(() => {
+          try {
+            renderResults();
+          } catch (e) {
+            console.error('[renderResults] error:', e);
+            setMsg(statusEl, 'Error rendering results view.', 'error');
+          }
+        }, 0);
+        setMsg(statusEl, '', null);
+        return;
       }
+
+      // Anything else -> New Item flow
+      console.warn('[lookup] not found or invalid:', res);
+      if (!requireEl('screenNew')) {
+        setMsg(statusEl, 'New Item view is missing in the DOM.', 'error');
+        return;
+      }
+      state.item = null;
+      state.step = 'newItem';
+      navigate('screenNew');
+      setTimeout(() => {
+        try {
+          renderNewItem();
+        } catch (e) {
+          console.error('[renderNewItem] error:', e);
+          setMsg(statusEl, 'Error rendering new item view.', 'error');
+        }
+      }, 0);
       setMsg(statusEl, '', null);
-    }catch(err){
-      console.error(err);
+
+    } catch(err){
+      console.error('[lookup] exception:', err);
       setMsg(statusEl, 'Lookup error. Please retry.', 'error');
-    }finally{
+    } finally{
       spinner(false, loadEl);
     }
   }
 
   // ------- View: Results (found) -------
   function renderResults(){
+     // Guard: if any critical element is missing, don’t throw—log & bail.
+    const must = ['resultsStatus','resultsLoad','resSpecies','resStage','resBrand','resName','resFlavor','resIngredients','resExp','resultsSave'];
+    for (const id of must) {
+      if (!requireEl(id)) {
+        console.error(`[renderResults] Missing #${id}. Check view.results.html IDs.`);
+        return;
+      }
+    }
     const status = $('#resultsStatus');
     const load = $('#resultsLoad');
 
