@@ -10,9 +10,9 @@
 (function () {
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
 
-  // Same-origin URLs (served by Code.gs router above)
   const INDEX_URL = (window.APP_BASE || '.') + '?static=scandit-index';
-  const ENGINE_URL = './?static=engine/';
+  const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/';
+  // then await SDK().configure(LICENSE, { engineLocation: ENGINE_URL })
 
   // ---------- small helpers ----------
   function SDK(){ return window.Scandit || null; }
@@ -27,12 +27,47 @@
   function warn(){ try{ console.warn('[Scanner]', ...arguments); }catch(e){} }
   function error(){ try{ console.error('[Scanner]', ...arguments); }catch(e){} }
 
+  console.log('[Scanner] about to load', INDEX_URL, 'define?', typeof window.define, 'module?', typeof window.module);
   function loadScriptSameOrigin(src){
     return new Promise((resolve, reject) => {
+      // Temporarily neutralize AMD/CommonJS so the UMD writes window.Scandit
+      const prevDefine  = window.define;
+      const prevModule  = window.module;
+      const prevExports = window.exports;
+      const hadDefineAmd = prevDefine && prevDefine.amd;
+
+      try {
+        if (hadDefineAmd) { try { delete window.define; } catch(_) { window.define = undefined; } }
+        if (prevModule)   { try { delete window.module; } catch(_) { window.module = undefined; } }
+        if (prevExports)  { try { delete window.exports; } catch(_) { window.exports = undefined; } }
+      } catch (_) {}
+
       const s = document.createElement('script');
-      s.src = src; s.async = true;
-      s.onload = () => resolve();
-      s.onerror = (e) => reject(new Error('Failed to load: ' + src));
+      s.src = src;
+      s.async = true;
+
+      s.onload = () => {
+        // Restore environment
+        if (hadDefineAmd) window.define = prevDefine;
+        if (prevModule)   window.module = prevModule;
+        if (prevExports)  window.exports = prevExports;
+
+        // Sanity log
+        console.log('[Scanner] script loaded, Scandit present?', !!window.Scandit);
+        if (!window.Scandit) {
+          reject(new Error('Scandit global missing after load'));
+        } else {
+          resolve();
+        }
+      };
+
+      s.onerror = () => {
+        if (hadDefineAmd) window.define = prevDefine;
+        if (prevModule)   window.module = prevModule;
+        if (prevExports)  window.exports = prevExports;
+        reject(new Error('Failed to load: ' + src));
+      };
+
       document.head.appendChild(s);
     });
   }
