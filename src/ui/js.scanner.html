@@ -1,20 +1,21 @@
 <script>
 /**
- * Scandit scanner (bundled) with resilient loader:
- * 1) Use inline bundle (window.Scandit) if present
- * 2) Else load from same-origin proxy:  APP_BASE + '?static=scandit-index'
- * 3) Else load from CDN
- * While loading, temporarily disable AMD/CommonJS so the SDK attaches to window.
- * Then configure() with bundled engine, set camera, symbologies, and listen.
+ * Scandit scanner (bundled) with resilient, self-booting loader.
+ * - Logs environment on load.
+ * - Immediately ensures Scandit global and configure() without relying on DOM events.
+ * - Load order: inline/global -> same-origin (?static=scandit-index) -> CDN.
+ * - Disables AMD/CommonJS temporarily so the SDK attaches to window.
+ * - Built-in camera, recommended settings, retail symbologies, reject unwanted codes.
+ * - Exposes window.Scanner.open() / close().
  */
 (function () {
   // ----- Config -----
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
   const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/';
-  const CDN_BUNDLE = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
+  const CDN_BUNDLE  = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
   const ORIGIN_BUNDLE = (window.APP_BASE ? `${window.APP_BASE}?static=scandit-index` : null);
 
-  // ----- Helpers -----
+  // ----- Basic helpers -----
   const S = () => window.Scandit || null;
   const isDigits12 = v => /^\d{12}$/.test(String(v || ''));
   const normalizeToUpcA = s => {
@@ -23,6 +24,15 @@
     if (/^0\d{12}$/.test(v)) return v.slice(1); // EAN-13 leading 0 -> UPC-A
     return '';
   };
+
+  // ----- Logging on load -----
+  console.log('[Scanner] boot', {
+    hasScandit: !!S(),
+    APP_BASE: window.APP_BASE || '(undefined)',
+    ORIGIN_BUNDLE,
+    CDN_BUNDLE,
+    hasLicense: !!String(LICENSE).trim()
+  });
 
   // Load a script ensuring it exports to window (disable AMD/CommonJS temporarily)
   function loadScriptForceGlobal(src) {
@@ -42,13 +52,12 @@
       s.src = src;
       s.async = true;
       s.onload = () => {
-        // restore env
         if (hadAMD) window.define = prevDefine;
         if (prevModule) window.module = prevModule;
         if (prevExports) window.exports = prevExports;
         resolve();
       };
-      s.onerror = (e) => {
+      s.onerror = () => {
         if (hadAMD) window.define = prevDefine;
         if (prevModule) window.module = prevModule;
         if (prevExports) window.exports = prevExports;
@@ -66,10 +75,8 @@
       try {
         console.warn('[Scanner] Scandit missing; loading:', src);
         await loadScriptForceGlobal(src);
-        if (S()) {
-          console.log('[Scanner] Scandit available after load:', src);
-          return true;
-        }
+        console.log('[Scanner] bundle loaded; Scandit present?', !!S());
+        if (S()) return true;
       } catch (e) {
         console.warn('[Scanner] load failed:', e.message || e);
       }
@@ -77,17 +84,21 @@
     return !!S();
   }
 
-  // ----- Early configure per docs -----
-  document.addEventListener('DOMContentLoaded', async () => {
+  async function configureIfNeeded() {
     try {
       if (!(await ensureScandit())) throw new Error('Scandit global missing after loads');
       if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
       await S().configure(LICENSE, { engineLocation: ENGINE_URL });
       console.log('[Scanner] configured OK');
+      return true;
     } catch (e) {
-      console.warn('[Scanner] early configure failed:', e?.message || e);
+      console.warn('[Scanner] configure failed:', e?.message || e);
+      return false;
     }
-  });
+  }
+
+  // ----- Self-boot: ensure + configure right away (no DOM event dependency) -----
+  (async () => { await configureIfNeeded(); })();
 
   // ----- UI helpers -----
   async function promptFallback() {
@@ -113,9 +124,8 @@
 
   async function open() {
     try {
-      if (!(await ensureScandit())) throw new Error('Scandit bundle unavailable');
-      // Retry configure if early configure didn’t run
-      try { await S().configure(LICENSE, { engineLocation: ENGINE_URL }); } catch (_) {}
+      // If for any reason we’re not configured yet, do it now.
+      await configureIfNeeded();
 
       return new Promise(async (resolve, reject) => {
         try {
