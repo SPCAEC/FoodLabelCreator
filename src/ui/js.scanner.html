@@ -1,80 +1,59 @@
 <script>
 /**
- * Scandit Web (bundled) loader + scanner
- * - Multi-CDN (jsDelivr → unpkg) & early configure() per docs.
- * - Built-in camera with recommended settings for BarcodeCapture.
- * - Retail symbologies (EAN-13/UPC-A, EAN-8, UPC-E) registered.
- * - Listener rejects unwanted scans; accepts UPC-A & EAN-13 (leading 0) only.
- * - Exposes window.Scanner.open() -> Promise<string>, window.Scanner.close()
+ * Scandit Web (bundled) loader + scanner — SAME-ORIGIN
+ * - Loads JS from:     ./?static=scandit-index
+ * - Loads engine from: ./?static=engine/...
+ * - Early configure(), built-in camera w/ recommended settings
+ * - Retail symbologies registered; reject unwanted in listener
+ * - Exposes window.Scanner.open() / close()
  */
 (function () {
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
 
-  // Bundled build (Core+Barcode in one file), matching Scandit docs
-  const SOURCES = [
-    {
-      js: "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js",
-      engine: "https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/"
-    },
-    {
-      js: "https://unpkg.com/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js",
-      engine: "https://unpkg.com/scandit-web-datacapture-bundled@7.6.1/build/engine/"
-    }
-  ];
+  // Same-origin URLs (served by Code.gs router above)
+  const INDEX_URL  = './?static=scandit-index';
+  const ENGINE_URL = './?static=engine/';
 
-  // ---- tiny utils ----
+  // ---------- small helpers ----------
   function SDK(){ return window.Scandit || null; }
-  function loadScript(src){
+  function isDigits12(v){ return /^\d{12}$/.test(String(v||'')); }
+  function normalizeToUpcA(s) {
+    const v = String(s||'').trim();
+    if (/^\d{12}$/.test(v)) return v;          // UPC-A direct
+    if (/^0\d{12}$/.test(v)) return v.slice(1);// EAN-13 w/ leading 0 -> UPC-A
+    return '';
+  }
+  function log(){ try{ console.log('[Scanner]', ...arguments); }catch(e){} }
+  function warn(){ try{ console.warn('[Scanner]', ...arguments); }catch(e){} }
+  function error(){ try{ console.error('[Scanner]', ...arguments); }catch(e){} }
+
+  function loadScriptSameOrigin(src){
     return new Promise((resolve, reject) => {
       const s = document.createElement('script');
       s.src = src; s.async = true;
       s.onload = () => resolve();
-      s.onerror = () => reject(new Error('Failed to load: ' + src));
+      s.onerror = (e) => reject(new Error('Failed to load: ' + src));
       document.head.appendChild(s);
     });
   }
-  function isDigits12(v){ return /^\d{12}$/.test(String(v||'')); }
-  function normalizeToUpcA(data){
-    const s = String(data||'').trim();
-    if (/^\d{12}$/.test(s)) return s;                  // UPC-A
-    if (/^0\d{12}$/.test(s)) return s.slice(1);        // EAN-13 leading 0 -> UPC-A
-    return '';                                         // unsupported here
-  }
 
-  let activeEngine = null;
-  let configured = false;
-  let context, view, camera, barcodeCapture;
-
-  async function ensureSDKLoadedAndConfigured(){
+  async function ensureConfigured(){
     if (!LICENSE) throw new Error('Missing SCANDIT_LICENSE');
+    if (SDK() && ensureConfigured._done) return;
 
-    if (SDK() && configured) return;                   // ready
-    if (SDK() && !configured && activeEngine) {
-      await SDK().configure(LICENSE, { engineLocation: activeEngine });
-      configured = true;
-      return;
+    if (!SDK()) {
+      log('loading bundled SDK from same origin:', INDEX_URL);
+      await loadScriptSameOrigin(INDEX_URL);
+      if (!SDK()) throw new Error('Scandit global missing after load');
     }
 
-    // Try each CDN until one succeeds
-    let lastErr = null;
-    for (const src of SOURCES) {
-      try {
-        if (!SDK()) await loadScript(src.js);
-        if (!SDK()) throw new Error('Scandit global not found after ' + src.js);
-        await SDK().configure(LICENSE, { engineLocation: src.engine });
-        activeEngine = src.engine;
-        configured = true;
-        console.log('[Scanner] Scandit configured via', src.js);
-        return;
-      } catch (e) {
-        console.warn('[Scanner] loader/configure failed:', e?.message || e);
-        lastErr = e;
-      }
-    }
-    throw lastErr || new Error('All Scandit sources failed');
+    log('calling configure()', { engine: ENGINE_URL });
+    await SDK().configure(LICENSE, { engineLocation: ENGINE_URL });
+    ensureConfigured._done = true;
+    log('configured OK');
   }
 
-  // ---- UI helpers ----
+  // ---------- UI helpers ----------
   async function promptFallback(){
     const v = window.prompt('Enter 12-digit UPC');
     if (!isDigits12(v)) throw new Error('closed');
@@ -94,12 +73,14 @@
     return root;
   }
 
-  // ---- scanner ----
+  // ---------- scanner state ----------
+  let context, view, camera, barcodeCapture;
+
   async function open() {
     try {
-      await ensureSDKLoadedAndConfigured();
+      await ensureConfigured();
     } catch (e) {
-      console.error('[Scanner] bundled script load/configure error:', e?.message || e);
+      error('bundled script load/configure error:', e?.message || e);
       return promptFallback();
     }
 
@@ -107,7 +88,7 @@
     return new Promise(async (resolve, reject) => {
       try {
         if (!context) {
-          // Context + View
+          // Context & View
           context = await S.DataCaptureContext.create();
           view    = await S.DataCaptureView.create(context);
 
@@ -117,27 +98,27 @@
           await camera.applySettings(cameraSettings);
           await context.setFrameSource(camera);
 
-          // Capture settings: enable exactly the retail set
+          // Capture settings: register retail set only
           const settings = new S.BarcodeCaptureSettings();
           settings.enableSymbologies([
             S.Symbology.ean13Upca,  // EAN-13 + UPC-A
-            S.Symbology.ean8,       // registered; currently rejected in logic below
-            S.Symbology.upce        // registered; currently rejected in logic below
+            S.Symbology.ean8,       // registered; currently rejected
+            S.Symbology.upce        // registered; currently rejected
           ]);
-          settings.codeDuplicateFilter = 1000; // ms: ignore duplicates briefly
+          settings.codeDuplicateFilter = 1000; // ms
           barcodeCapture = await S.BarcodeCapture.create(context, settings);
 
-          // Overlay / viewfinder
+          // Overlay & Viewfinder
           const overlay = S.BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
           overlay.viewfinder = new S.RectangularViewfinder();
         }
 
-        // Modal host + attach view
+        // Attach to modal
         const modal = buildModal();
         const mount = modal.querySelector('#scanView');
         await view.connectToElement(mount);
 
-        // Listener with rejection logic (per docs: reject in listener so it never hits session updates)
+        // Listener with REJECTION logic (keeps unwanted codes out of session)
         const listener = {
           didScan: async (_, session) => {
             const barcodes = session.newlyRecognizedBarcodes || [];
@@ -151,42 +132,39 @@
 
               if (sym === S.Symbology.ean13Upca) {
                 normalized = normalizeToUpcA(data);
-                accept = !!normalized; // UPC-A or EAN-13 starting 0
+                accept = !!normalized; // accept UPC-A or EAN-13 with leading 0
               } else if (sym === S.Symbology.ean8 || sym === S.Symbology.upce) {
-                // Registered but currently not accepted until we implement expansion
-                accept = false;
+                accept = false;        // TODO: add proper expansion when ready
               }
 
               if (!accept) {
-                if (typeof session.rejectCode === 'function') {
-                  session.rejectCode(b);
-                } else if (typeof session.rejectBarcode === 'function') {
-                  session.rejectBarcode(b);
-                }
-                continue; // evaluate any other codes this frame
+                if (typeof session.rejectCode === 'function') session.rejectCode(b);
+                else if (typeof session.rejectBarcode === 'function') session.rejectBarcode(b);
+                log('rejected', { sym, data });
+                continue;
               }
 
-              // Accept: stop scanning and resolve with normalized UPC-A (12 digits)
+              log('accepted', { data, normalized });
               try { await barcodeCapture.setEnabled(false); } catch(e){}
               try { await camera.switchToDesiredState(S.FrameSourceState.Off); } catch(e){}
               close();
               return resolve(normalized);
             }
-            // Nothing accepted in this frame → keep scanning
           }
         };
         await barcodeCapture.addListener(listener);
 
-        // Turn camera ON and enable capture
+        // Turn camera ON & start capture
         await camera.switchToDesiredState(S.FrameSourceState.On);
         await barcodeCapture.setEnabled(true);
+        log('camera on & capture enabled');
 
         modal.querySelector('#closeScanBtn').onclick = () => {
           close();
           reject(new Error('closed'));
         };
       } catch (err) {
-        console.error('[Scanner] init error:', err);
+        error('init error:', err);
         try { close(); } catch(e){}
         try { resolve(await promptFallback()); } catch(e){ reject(err); }
       }
@@ -199,12 +177,13 @@
     try { camera && S && camera.switchToDesiredState(S.FrameSourceState.Off); } catch(e){}
     const modal = document.getElementById('scanModal');
     if (modal) modal.remove();
+    log('scanner closed');
   }
 
-  // Pre-configure EARLY (per docs) so engine files are fetched before user clicks scan
+  // Configure EARLY so engine files preload
   document.addEventListener('DOMContentLoaded', async () => {
-    try { await ensureSDKLoadedAndConfigured(); }
-    catch (e) { console.warn('[Scanner] early configure failed:', e?.message || e); }
+    try { await ensureConfigured(); }
+    catch (e) { warn('early configure failed:', e?.message || e); }
   });
 
   window.Scanner = { open, close };
