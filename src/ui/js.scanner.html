@@ -11,7 +11,7 @@
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
 
   // Same-origin URLs (served by Code.gs router above)
-  const INDEX_URL  = './?static=scandit-index';
+  const INDEX_URL = (window.APP_BASE || '.') + '?static=scandit-index';
   const ENGINE_URL = './?static=engine/';
 
   // ---------- small helpers ----------

@@ -8,9 +8,7 @@
 
   <!-- App CSS (templated include) -->
   <?!= include('ui/css.kiosk'); ?>
-
-  <!-- Scandit 7.6.1 (Core + Barcode). Requires configure() with license + library location. -->
-  <script src="https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js"></script>
+  <script>window.APP_BASE="<?= baseUrl ?>";</script>
 </head>
 <body>
   <main class="app">
