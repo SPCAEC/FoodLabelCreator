@@ -1,5 +1,5 @@
 <!-- Launch / Home screen -->
-<section id="view-launch" class="screen">
+<section id="view-launch" class="screen active">
   <div class="card">
     <h2 class="h">Start a label</h2>
     <p class="t">Scan a barcode or enter a 12-digit UPC to look up or create a product label.</p>
@@ -27,6 +27,7 @@
     </div>
 
     <div class="msg info" id="launchInfo" role="status" aria-live="polite" hidden></div>
+    <div id="launchLoad" class="spinner" hidden></div>
     <div class="msg error" id="launchError" role="alert" hidden></div>
   </div>
 

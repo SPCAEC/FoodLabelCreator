@@ -10,10 +10,13 @@
   // ------- DOM helpers -------
   const $ = sel => document.querySelector(sel);
   const $$ = sel => Array.from(document.querySelectorAll(sel));
-  function show(id){
-    $$('.screen').forEach(s => s.classList.add('hidden'));
-    const el = document.getElementById(id);
-    if (el) { el.classList.remove('hidden'); window.scrollTo({top:0, behavior:'smooth'}); }
+  function navigate(id){
+  $$('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) {
+    el.classList.add('active');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
   }
   function setMsg(el, text, type){ 
     el.textContent = text || '';
@@ -47,7 +50,7 @@
     const scanBtn = $('#scanBtn');
     const startOverBtns = $$('.startOver');
 
-    const status = $('#launchStatus');
+    const status = $('#launchInfo');
     const load = $('#launchLoad');
 
     function updateLookupBtn(){
@@ -100,13 +103,13 @@
         // Preload item and go to results screen
         state.item = normalizeItemFromSheet(res.item || {});
         state.step = 'results';
-        show('screenResults');
+        navigate('screenResults');
         renderResults();
       } else {
         // Not found → New Item flow (front photo first)
         state.item = null;
         state.step = 'newItem';
-        show('screenNew');
+        navigate('screenNew');
         renderNewItem();
       }
       setMsg(statusEl, '', null);
@@ -171,7 +174,7 @@
           setMsg(status, 'Label created ✓', 'success');
           // Advance to done screen
           state.step = 'done';
-          show('screenDone');
+          navigate('screenDone');
           renderDone();
         } else {
           setMsg(status, 'Unexpected response while creating label.', 'error');
@@ -286,7 +289,7 @@
 
     nextBtn.onclick = () => {
       state.step = 'review';
-      show('screenReview');
+      navigate('screenReview');
       renderReview();
     };
   }
@@ -345,7 +348,7 @@
           state.pdf = { url: res.pdfUrl, id: res.fileId || '' };
           setMsg(status, 'Label created ✓', 'success');
           state.step = 'done';
-          show('screenDone');
+          navigate('screenDone');
           renderDone();
         }else{
           setMsg(status, 'Unexpected response when creating label.', 'error');
@@ -458,7 +461,7 @@
     const upc = $('#upcInput'); if (upc) upc.value = '';
     const lookupBtn = $('#lookupBtn'); if (lookupBtn) lookupBtn.disabled = true;
 
-    show('screenLaunch');
+    navigate('screenLaunch');
   }
 
   // ------- Wire global nav buttons -------
@@ -473,7 +476,7 @@
   document.addEventListener('DOMContentLoaded', () => {
     wireGlobal();
     wireLaunch();
-    show('screenLaunch');
+    navigate('screenLaunch');
   });
 
 })();
