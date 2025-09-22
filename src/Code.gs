@@ -1,12 +1,26 @@
+/** Food Label Creator — App bootstrap + HTML templating */
+function doGet(e) {
+  const tpl = HtmlService.createTemplateFromFile('ui/Index');
+  tpl.cacheBust = Date.now();
+  return tpl
+    .evaluate()
+    .setTitle('Food Label Creator')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
+function include(filename) {
+  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+}
+
 // --- Forgiving UPC normalizer ---
 function normalizeUPC_(v) {
   let s = String(v == null ? '' : v).replace(/\D/g, '');
   if (s.length === 13 && s.charAt(0) === '0') {
-    s = s.slice(1); // EAN-13 with leading 0 → UPC-A
+    s = s.slice(1);
   }
-  if (s.length > 13) return ''; // invalid, way too long
+  if (s.length > 13) return '';
   if (s.length < 12 && s.length > 0) {
-    s = s.padStart(12, '0'); // pad numbers like 11939025916 → 011939025916
+    s = s.padStart(12, '0');
   }
   return s.length === 12 ? s : '';
 }
