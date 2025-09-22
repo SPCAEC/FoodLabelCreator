@@ -1,69 +1,81 @@
 <script>
 /**
- * Scandit 7.6.1 setup (Web SDK).
- * Exposes global: window.Scanner.open() -> Promise<string>, window.Scanner.close()
- *
- * - Configures core & barcode packages with license + engineLocation.
- * - Shows a modal with live camera view.
- * - Resolves with first scanned EAN13/UPCA code, then closes.
+ * Scandit 7.6.1 camera scanner
+ * Exposes: window.Scanner.open() -> Promise<string>, window.Scanner.close()
  */
-
-(function(){
+(function () {
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
   const ENGINE_LOCATION = "https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-core@7.6.1/build/engine/";
+
+  // Accept any of the possible globals the CDN may define
+  const SDK = window.ScanditSDK || window.Scandit || window.scandit;
+
+  // Fallback prompt (keeps app usable if SDK missing)
+  function isValidUPC(v){ return /^\d{12}$/.test(String(v||'').trim()); }
+  async function promptFallback(){
+    const v = window.prompt('Enter 12-digit UPC');
+    if (!isValidUPC(v)) throw new Error('closed');
+    return String(v).trim();
+  }
 
   let context, view, camera, barcodeCapture;
 
   async function initScandit() {
-    if (!window.ScanditSDK) throw new Error('Scandit SDK not loaded');
-    // Configure SDK once
-    await ScanditSDK.configure(LICENSE, { engineLocation: ENGINE_LOCATION });
+    if (!SDK) throw new Error('Scandit SDK not loaded');
+    // Configure once
     if (!context) {
-      context = await ScanditSDK.DataCaptureContext.create();
-      view = await ScanditSDK.DataCaptureView.create(context);
-      camera = ScanditSDK.Camera.default;
+      await SDK.configure(LICENSE, { engineLocation: ENGINE_LOCATION });
+
+      context = await SDK.DataCaptureContext.create();
+      view    = await SDK.DataCaptureView.create(context);
+
+      camera  = SDK.Camera.default;
       await context.setFrameSource(camera);
 
-      // Barcode settings
-      const settings = new ScanditSDK.BarcodeCaptureSettings();
-      settings.enableSymbologies([ScanditSDK.Symbology.ean13Upca]);
-      barcodeCapture = await ScanditSDK.BarcodeCapture.create(context, settings);
+      const settings = new SDK.BarcodeCaptureSettings();
+      settings.enableSymbologies([SDK.Symbology.ean13Upca]);
 
-      // Overlay for aiming UI
-      const overlay = ScanditSDK.BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
-      overlay.viewfinder = new ScanditSDK.RectangularViewfinder();
+      barcodeCapture = await SDK.BarcodeCapture.create(context, settings);
+
+      const overlay = SDK.BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
+      overlay.viewfinder = new SDK.RectangularViewfinder();
     }
     return { context, view, camera, barcodeCapture };
   }
 
-  async function open(){
+  function buildModal() {
+    const root = document.createElement('div');
+    root.id = 'scanModal';
+    root.className = 'card camera';
+    root.innerHTML = `
+      <div id="scanView" style="width:100%;height:65vh;border-radius:16px;overflow:hidden;"></div>
+      <div class="actions" style="margin-top:.75rem;">
+        <button class="btn ghost" id="closeScanBtn" type="button">Close Camera</button>
+      </div>
+    `;
+    (document.querySelector('#screen') || document.body).prepend(root);
+    return root;
+  }
+
+  async function open() {
+    // If SDK isn’t present or license missing, gracefully fallback to prompt
+    if (!SDK || !LICENSE) return promptFallback();
+
     return new Promise(async (resolve, reject) => {
-      try{
+      try {
         const { view, camera, barcodeCapture } = await initScandit();
+        const modal = buildModal();
+        const mount = modal.querySelector('#scanView');
 
-        // Create modal
-        const root = document.createElement('div');
-        root.id = 'scanModal';
-        root.className = 'card camera';
-        root.innerHTML = `
-          <div id="scanView" style="width:100%;height:65vh;border-radius:16px;overflow:hidden;"></div>
-          <div class="actions" style="margin-top:.75rem;">
-            <button class="btn ghost" id="closeScanBtn">Close Camera</button>
-          </div>
-        `;
-        document.querySelector('#screen').prepend(root);
+        await view.connectToElement(mount);
 
-        // Attach view
-        await view.connectToElement(document.getElementById('scanView'));
-
-        // Listener
         const listener = {
           didScan: async (_, session) => {
             const newly = session.newlyRecognizedBarcodes;
             if (newly.length) {
               const code = newly[0].data;
               await barcodeCapture.setEnabled(false);
-              await camera.switchToDesiredState(ScanditSDK.FrameSourceState.Off);
+              await camera.switchToDesiredState(SDK.FrameSourceState.Off);
               close();
               resolve(code);
             }
@@ -71,25 +83,25 @@
         };
         await barcodeCapture.addListener(listener);
 
-        // Start camera
-        await camera.switchToDesiredState(ScanditSDK.FrameSourceState.On);
+        await camera.switchToDesiredState(SDK.FrameSourceState.On);
         await barcodeCapture.setEnabled(true);
 
-        // Close button
-        document.getElementById('closeScanBtn').onclick = () => {
+        modal.querySelector('#closeScanBtn').onclick = () => {
           close();
           reject(new Error('closed'));
         };
-
-      }catch(err){
-        reject(err);
+      } catch (err) {
+        // If anything inits wrong, fallback to prompt so the user can still proceed
+        console.error('Scanner init error:', err);
+        try { close(); } catch(e){}
+        try { resolve(await promptFallback()); } catch(e){ reject(err); }
       }
     });
   }
 
-  function close(){
-    if (barcodeCapture) barcodeCapture.setEnabled(false).catch(()=>{});
-    if (camera) camera.switchToDesiredState(ScanditSDK.FrameSourceState.Off).catch(()=>{});
+  function close() {
+    try { barcodeCapture && barcodeCapture.setEnabled(false); } catch(e){}
+    try { camera && camera.switchToDesiredState((SDK && SDK.FrameSourceState.Off) || 'off'); } catch(e){}
     const modal = document.getElementById('scanModal');
     if (modal) modal.remove();
   }
