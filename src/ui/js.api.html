@@ -1,30 +1,69 @@
 <script>
-/** Client wrapper around google.script.run */
-const API = {
-  lookup(upc){
-    return new Promise((res,rej)=>{
-      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiLookup(upc);
-    });
-  },
-  saveAndCreateLabel(payload){
-    return new Promise((res,rej)=>{
-      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiSaveAndCreateLabel(payload);
-    });
-  },
-  uploadFront(upc, dataUrl){
-    return new Promise((res,rej)=>{
-      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiUploadFront(upc, dataUrl);
-    });
-  },
-  uploadIngredients(upc, dataUrl){
-    return new Promise((res,rej)=>{
-      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiUploadIngredients(upc, dataUrl);
-    });
-  },
-  extractFromImages(req){
-    return new Promise((res,rej)=>{
-      google.script.run.withSuccessHandler(res).withFailureHandler(rej).apiExtractFromImages(req);
+/** Client wrapper around google.script.run (with normalization + fallbacks) */
+(function () {
+  function _gsr(method, ...args) {
+    return new Promise((resolve, reject) => {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(reject)[method](...args);
     });
   }
-};
+
+  // ---------- UPC normalization (client-side) ----------
+  function normalizeUPC(raw) {
+    let s = String(raw || '').replace(/\D/g, ''); // digits only
+    // EAN-13 starting with 0 -> UPC-A 12
+    if (s.length === 13 && s[0] === '0') s = s.slice(1);
+    // If shorter (Sheet stored as number), left-pad
+    if (s.length > 0 && s.length < 12) s = s.padStart(12, '0');
+    return s;
+  }
+
+  // ---------- Public API ----------
+  const API = {
+    /** Lookup by UPC (send as {upc: '012345678905'}) */
+    lookup(raw) {
+      const upc = normalizeUPC(raw);
+      if (upc.length !== 12) {
+        // Keep client behavior predictable
+        return Promise.resolve({ found: false, reason: 'invalid_length', sent: upc });
+      }
+      return _gsr('apiLookup', { upc });
+    },
+
+    /**
+     * Create labels (and optionally save new/updated record)
+     * Tries apiCreateLabels first; falls back to apiSaveAndCreateLabel for older backends.
+     */
+    createLabels(payload) {
+      return _gsr('apiCreateLabels', payload)
+        .catch(() => _gsr('apiSaveAndCreateLabel', payload));
+    },
+
+    /** Optional direct uploads (if your backend supports them) */
+    uploadFront(upc, dataUrl) {
+      const n = normalizeUPC(upc);
+      return _gsr('apiUploadFront', n, dataUrl);
+    },
+    uploadIngredients(upc, dataUrl) {
+      const n = normalizeUPC(upc);
+      return _gsr('apiUploadIngredients', n, dataUrl);
+    },
+
+    /**
+     * Extract label data from images.
+     * Usage in js.app.html: API.extract(frontBase64) or API.extract(frontBase64, ingBase64)
+     * Maps to apiExtractFromImages({ front, ingredients })
+     */
+    extract(front, ingredients) {
+      return _gsr('apiExtractFromImages', {
+        front: front || null,
+        ingredients: (typeof ingredients === 'string' && ingredients) ? ingredients : null
+      });
+    }
+  };
+
+  // expose globally
+  window.API = API;
+})();
 </script>
