@@ -50,54 +50,69 @@
 
   // ------- View wiring: Launch -------
   function wireLaunch(){
-    const upcInput = $('#upcInput');
-    const lookupBtn = $('#lookupBtn');
-    const scanBtn = $('#scanBtn');
-    const startOverBtns = $$('.startOver');
+  const upcInput = $('#upcInput');
+  const lookupBtn = $('#lookupBtn');
+  const scanBtn = $('#scanBtn');
+  const clearBtn = $('#clearBtn');
+  const startOverBtns = $$('.startOver');
 
-    const status = $('#launchInfo');
-    const load = $('#launchLoad');
+  const status = $('#launchInfo');
+  const load = $('#launchLoad');
 
-    function updateLookupBtn(){
-      lookupBtn.disabled = !isValidUPC(upcInput.value);
-    }
+  function updateLookupBtn(){
+    lookupBtn.disabled = !isValidUPC(upcInput.value);
+  }
 
-    upcInput.addEventListener('input', () => {
-      // only numeric, max 12
-      upcInput.value = upcInput.value.replace(/\D/g,'').slice(0,12);
+  // Normalize input and (re)validate
+  upcInput.addEventListener('input', () => {
+    upcInput.value = upcInput.value.replace(/\D/g,'').slice(0,12);
+    updateLookupBtn();
+  });
+
+  // Lookup (manual)
+  lookupBtn.addEventListener('click', async () => {
+    if (lookupBtn.disabled) return; // guard
+    state.upc = upcInput.value;
+    await doLookup(status, load);
+  });
+
+  // Scan
+  scanBtn.addEventListener('click', async () => {
+    setMsg(status, 'Opening camera…', null);
+    spinner(true, load);
+    try{
+      const upc = await Scanner.open();  // from js.scanner.html
+      state.upc = upc;
+      upcInput.value = upc;
       updateLookupBtn();
-    });
-
-    lookupBtn.addEventListener('click', async () => {
-      state.upc = upcInput.value;
+      setMsg(status, 'Scanned ✓ Looking up…', 'success');
       await doLookup(status, load);
-    });
-
-    scanBtn.addEventListener('click', async () => {
-      setMsg(status, 'Opening camera…', null);
-      spinner(true, load);
-      try{
-        const upc = await Scanner.open();  // from js.scanner.html
-        state.upc = upc;
-        upcInput.value = upc;
-        updateLookupBtn();
-        setMsg(status, 'Scanned ✓ Looking up…', 'success');
-        await doLookup(status, load);
-      }catch(err){
-        if (String(err||'').includes('closed')) {
-          setMsg(status, 'Camera closed. You can type the UPC or try scanning again.', null);
-        } else {
-          console.error(err);
-          setMsg(status, 'Scan failed. Try again or type the UPC.', 'error');
-        }
-      }finally{
-        spinner(false, load);
-        try { Scanner.close(); } catch(e){}
+    }catch(err){
+      if (String(err||'').includes('closed')) {
+        setMsg(status, 'Camera closed. You can type the UPC or try scanning again.', null);
+      } else {
+        console.error(err);
+        setMsg(status, 'Scan failed. Try again or type the UPC.', 'error');
       }
-    });
+    }finally{
+      spinner(false, load);
+      try { Scanner.close(); } catch(e){}
+    }
+  });
 
-    startOverBtns.forEach(b => b.addEventListener('click', resetApp));
-    spinner(false, load);  // ensure hidden on page load
+  // Clear button
+  clearBtn?.addEventListener('click', () => {
+    upcInput.value = '';
+    updateLookupBtn();       // disables Lookup
+    setMsg(status, '');      // clear any status text
+    // keep spinner off
+  });
+
+  startOverBtns.forEach(b => b.addEventListener('click', resetApp));
+
+  // Initial state on load
+  updateLookupBtn();         // ensures Lookup starts disabled
+  spinner(false, load);      // ensure spinner hidden
   }
 
   async function doLookup(statusEl, loadEl){
