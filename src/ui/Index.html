@@ -22,14 +22,18 @@
 
   <!-- Restore AMD/CommonJS if the host relied on them -->
   <script>
-    (function(){
-      var b = window.__amd_backup__ || {};
-      if (b.define !== undefined)  window.define  = b.define;
-      if (b.module !== undefined)  window.module  = b.module;
-      if (b.exports !== undefined) window.exports = b.exports;
-    })();
+  (function(){
+    // Restore AMD/CommonJS if the host relied on them
+    var b = window.__amd_backup__ || {};
+    if (b.define !== undefined)  window.define  = b.define;
+    if (b.module !== undefined)  window.module  = b.module;
+    if (b.exports !== undefined) window.exports = b.exports;
+
+    // NEW: report what the inline helper said
+    console.log('[INLINE] result:', window.__SCANDIT_INLINE_RESULT__ || null);
     console.log('[INDEX] inline bundle present?', !!window.Scandit);
-  </script>
+  })();
+</script>
 </head>
 <body>
   <main class="app">

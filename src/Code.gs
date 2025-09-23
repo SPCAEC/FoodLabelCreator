@@ -5,14 +5,32 @@
    We escape </script> so the browser doesn't prematurely close the tag. */
 function scanditInline() {
   var url = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
-  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-  var code = resp.getResponseCode();
-  if (code !== 200) {
-    return '/* failed to fetch Scandit bundle: ' + code + ' */';
+  try {
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
+    var code = resp.getResponseCode();
+    if (code !== 200) {
+      return "window.__SCANDIT_INLINE_RESULT__={ok:false,status:" + code + "};" +
+             "console.warn('[INLINE] fetch failed status', " + code + ");";
+    }
+    var js = resp.getContentText('UTF-8');
+    var bytes = js.length;
+
+    // IMPORTANT: escape closing tag to avoid early termination
+    js = js.replace(/<\/script>/gi, '<\\/script>');
+
+    // Prefix a tiny probe so we can see in the browser if the inline ran
+    var prefix =
+      "window.__SCANDIT_INLINE_RESULT__={ok:true, bytes:" + bytes + "};" +
+      "console.log('[INLINE] inserted bytes', " + bytes + ");";
+
+    // Help DevTools source identification (optional)
+    var suffix = "\n//# sourceURL=scandit-bundled-inline.js";
+
+    return prefix + js + suffix;
+  } catch (e) {
+    return "window.__SCANDIT_INLINE_RESULT__={ok:false,error:" + JSON.stringify(String(e)) + "};" +
+           "console.warn('[INLINE] exception', " + JSON.stringify(String(e)) + ");";
   }
-  var js = resp.getContentText('UTF-8');
-  js = js.replace(/<\/script>/gi, '<\\/script>') + '\n//# sourceURL=scandit-bundled-inline.js';
-  return js;
 }
 
 /* -------------------- HTML bootstrap -------------------- */
