@@ -9,7 +9,7 @@
  */
 (function () {
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
-  const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/';
+  const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-bundled@7.6.1/build/engine/';
 
   const S = () => window.Scandit || null;
   const isDigits12 = v => /^\d{12}$/.test(String(v || ''));
