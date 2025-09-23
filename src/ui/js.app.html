@@ -115,10 +115,10 @@
 
   // Scan
   scanBtn.addEventListener('click', () => {
-  // No spinner here; the popup handles UX. We’ll set state when we get a result.
-  setMsg(status, 'Opening scanner…', null);
+  const status = document.querySelector('#launchInfo');
+  if (status) status.textContent = 'Opening scanner…';
   window.MiniScanner.open();
-  }); 
+  });
 
   // Clear button
   clearBtn?.addEventListener('click', () => {
