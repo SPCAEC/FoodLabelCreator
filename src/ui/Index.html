@@ -9,31 +9,8 @@
   <!-- Kiosk styles -->
   <?!= include('ui/css.kiosk'); ?>
 
-  <!-- Neutralize AMD/CommonJS so the SDK attaches to window -->
-  <script>
-    (function(){
-      window.__amd_backup__ = { define: window.define, module: window.module, exports: window.exports };
-      try { window.define = void 0; window.module = void 0; window.exports = void 0; } catch (e) {}
-    })();
-  </script>
-
-  <!-- INLINE Scandit bundled JS so window.Scandit exists immediately -->
-  <script><?!= scanditInline() ?></script>
-
-  <!-- Restore AMD/CommonJS if the host relied on them -->
-  <script>
-  (function(){
-    // Restore AMD/CommonJS if the host relied on them
-    var b = window.__amd_backup__ || {};
-    if (b.define !== undefined)  window.define  = b.define;
-    if (b.module !== undefined)  window.module  = b.module;
-    if (b.exports !== undefined) window.exports = b.exports;
-
-    // NEW: report what the inline helper said
-    console.log('[INLINE] result:', window.__SCANDIT_INLINE_RESULT__ || null);
-    console.log('[INDEX] inline bundle present?', !!window.Scandit);
-  })();
-</script>
+  <!-- Load Scandit bundled (Core+Barcode) directly from CDN in the BROWSER -->
+  <script src="https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js"></script>
 </head>
 <body>
   <main class="app">
@@ -50,7 +27,7 @@
     <div id="toast" class="msg" role="status" aria-live="polite"></div>
   </main>
 
-  <!-- App scripts (order matters: scanner before app) -->
+  <!-- App scripts (order matters) -->
   <?!= include('ui/js.api'); ?>
   <?!= include('ui/js.scanner'); ?>
   <?!= include('ui/js.app'); ?>

@@ -1,41 +1,8 @@
-/** Food Label Creator — Web App bootstrap + APIs + Scandit inline helper */
-
-/* -------------------- Scandit inline bundle helper -------------------- */
-/* We fetch the bundled JS at render time and inline it into Index.html.
-   We escape </script> so the browser doesn't prematurely close the tag. */
-function scanditInline() {
-  var url = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
-  try {
-    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, followRedirects: true });
-    var code = resp.getResponseCode();
-    if (code !== 200) {
-      return "window.__SCANDIT_INLINE_RESULT__={ok:false,status:" + code + "};" +
-             "console.warn('[INLINE] fetch failed status', " + code + ");";
-    }
-    var js = resp.getContentText('UTF-8');
-    var bytes = js.length;
-
-    // IMPORTANT: escape closing tag to avoid early termination
-    js = js.replace(/<\/script>/gi, '<\\/script>');
-
-    // Prefix a tiny probe so we can see in the browser if the inline ran
-    var prefix =
-      "window.__SCANDIT_INLINE_RESULT__={ok:true, bytes:" + bytes + "};" +
-      "console.log('[INLINE] inserted bytes', " + bytes + ");";
-
-    // Help DevTools source identification (optional)
-    var suffix = "\n//# sourceURL=scandit-bundled-inline.js";
-
-    return prefix + js + suffix;
-  } catch (e) {
-    return "window.__SCANDIT_INLINE_RESULT__={ok:false,error:" + JSON.stringify(String(e)) + "};" +
-           "console.warn('[INLINE] exception', " + JSON.stringify(String(e)) + ");";
-  }
-}
+/** Food Label Creator — Web App bootstrap + APIs (CDN Scandit load) */
 
 /* -------------------- HTML bootstrap -------------------- */
 function doGet() {
-  var tpl = HtmlService.createTemplateFromFile('ui/Index');
+  const tpl = HtmlService.createTemplateFromFile('ui/Index');
   tpl.cacheBust = Date.now();
   return tpl
     .evaluate()
@@ -49,9 +16,10 @@ function include(filename) {
 }
 
 /* -------------------- UPC utils + Lookup API -------------------- */
+
 /** Normalize to 12-digit UPC-A (forgiving). */
 function normalizeUPC_(v) {
-  var s = String(v == null ? '' : v).replace(/\D/g, '');
+  let s = String(v == null ? '' : v).replace(/\D/g, '');
   if (s.length === 13 && s.charAt(0) === '0') s = s.slice(1); // EAN-13 -> UPC-A
   if (s.length > 13) return '';
   if (s.length > 0 && s.length < 12) s = s.padStart(12, '0');  // recover leading zeros
@@ -60,45 +28,45 @@ function normalizeUPC_(v) {
 
 /** Lookup by UPC against configured sheet; returns UI-ready shape with diagnostics. */
 function apiLookup(payload) {
-  var raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
-  var upc = normalizeUPC_(raw);
+  const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
+  const upc = normalizeUPC_(raw);
 
-  var props     = PropertiesService.getScriptProperties();
-  var sheetId   = props.getProperty('SHEET_ID')   || '';
-  var sheetName = props.getProperty('SHEET_NAME') || 'Products';
+  const props     = PropertiesService.getScriptProperties();
+  const sheetId   = props.getProperty('SHEET_ID')   || '';
+  const sheetName = props.getProperty('SHEET_NAME') || 'Products';
 
-  if (!upc) return { found:false, reason:'invalid_length', sent:String(raw||''), __ver:'v7' };
+  if (!upc) return { found:false, reason:'invalid_length', sent:String(raw||''), __ver:'cdn-v1' };
 
-  var ss;
+  let ss;
   try { ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActive(); }
-  catch (e) { return { found:false, reason:'sheet_open_failed', detail:String(e), __ver:'v7' }; }
+  catch (e) { return { found:false, reason:'sheet_open_failed', detail:String(e), __ver:'cdn-v1' }; }
 
-  var sh = ss.getSheetByName(sheetName);
-  if (!sh) return { found:false, reason:'sheet_not_found', sheetName:sheetName, __ver:'v7' };
+  const sh = ss.getSheetByName(sheetName);
+  if (!sh) return { found:false, reason:'sheet_not_found', sheetName, __ver:'cdn-v1' };
 
-  var values = sh.getDataRange().getValues();
-  if (values.length < 2) return { found:false, reason:'empty_sheet', rows:values.length, __ver:'v7' };
+  const values = sh.getDataRange().getValues();
+  if (values.length < 2) return { found:false, reason:'empty_sheet', rows:values.length, __ver:'cdn-v1' };
 
-  var headers = values[0].map(String);
-  var idxUPC  = headers.indexOf('UPC');
-  if (idxUPC === -1) return { found:false, reason:'upc_header_missing', headers:headers, expect:'UPC', __ver:'v7' };
+  const headers = values[0].map(String);
+  const idxUPC  = headers.indexOf('UPC');
+  if (idxUPC === -1) return { found:false, reason:'upc_header_missing', headers, expect:'UPC', __ver:'cdn-v1' };
 
-  var samples = [];
-  var hit = null;
-  for (var r = 1; r < values.length; r++) {
-    var norm = normalizeUPC_(values[r][idxUPC]);
+  const samples = [];
+  let hit = null;
+  for (let r = 1; r < values.length; r++) {
+    const norm = normalizeUPC_(values[r][idxUPC]);
     if (samples.length < 6 && norm) samples.push(norm);
     if (norm === upc) {
-      var rec = {};
-      headers.forEach(function(h,i){ rec[h] = values[r][i]; });
+      const rec = {};
+      headers.forEach((h,i)=> rec[h] = values[r][i]);
       hit = rec; break;
     }
   }
   if (!hit) {
     return {
-      found:false, upc:upc, reason:'not_found', samples:samples,
-      sheet:{ id:sheetId||'(active)', name:sheetName, header:'UPC' }, __ver:'v7'
+      found:false, upc, reason:'not_found', samples,
+      sheet:{ id: sheetId || '(active)', name: sheetName, header: 'UPC' }, __ver:'cdn-v1'
     };
   }
-  return { found:true, upc:upc, item:hit, __ver:'v7' };
+  return { found:true, upc, item:hit, __ver:'cdn-v1' };
 }

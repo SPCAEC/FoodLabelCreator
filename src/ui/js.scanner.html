@@ -1,9 +1,10 @@
 <script>
 /**
- * Scandit Web (inline-bundle + CDN engine)
- * - Assumes window.Scandit is already defined by Index.html inline bundle.
- * - Configures immediately; falls back to prompt if configuration not possible.
- * - Built-in camera, recommended settings, EAN-13/UPC-A + EAN-8 + UPC-E (reject EAN-8/UPC-E for now).
+ * Scandit Web (CDN bundle + CDN engine)
+ * - Expects window.Scandit from the CDN <script> in Index.html.
+ * - Configures on DOMContentLoaded using engineLocation.
+ * - Built-in camera, recommended settings.
+ * - Symbologies: EAN-13/UPC-A (accepted), EAN-8 + UPC-E (registered, rejected via logic for now).
  * - Exposes: window.Scanner.open() / close()
  */
 (function () {
@@ -12,30 +13,28 @@
 
   const S = () => window.Scandit || null;
   const isDigits12 = v => /^\d{12}$/.test(String(v || ''));
-  const normalizeToUpcA = s => {
-    const v = String(s || '').trim();
-    if (/^\d{12}$/.test(v)) return v;           // UPC-A
-    if (/^0\d{12}$/.test(v)) return v.slice(1); // EAN-13 leading 0 -> UPC-A
+  const normalizeToUpcA = v => {
+    const s = String(v || '').trim();
+    if (/^\d{12}$/.test(s)) return s;        // UPC-A
+    if (/^0\d{12}$/.test(s)) return s.slice(1); // EAN-13 w/ leading 0 -> UPC-A
     return '';
   };
 
-  console.log('[Scanner] boot: hasScandit=', !!S(), 'license=', !!String(LICENSE).trim());
-
-  async function configureOnce() {
-    if (!S()) throw new Error('Scandit global missing (inline bundle did not run)');
-    if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
-    await S().configure(LICENSE, { engineLocation: ENGINE_URL });
-    console.log('[Scanner] configured OK');
-  }
-
-  // Kick configuration ASAP (no DOM event dependency)
   let configured = false;
-  (async () => {
-    try { await configureOnce(); configured = true; }
-    catch (e) { console.warn('[Scanner] early configure failed:', e?.message || e); }
-  })();
 
-  // --- UI helpers & state ---
+  document.addEventListener('DOMContentLoaded', async () => {
+    try {
+      if (!S()) throw new Error('Scandit global missing (CDN script failed to load)');
+      if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
+      await S().configure(LICENSE, { engineLocation: ENGINE_URL });
+      configured = true;
+      console.log('[Scanner] configured via CDN');
+    } catch (e) {
+      console.warn('[Scanner] configure failed:', e?.message || e);
+    }
+  });
+
+  // --- UI helpers ---
   async function promptFallback(){
     const v = window.prompt('Enter 12-digit UPC');
     if (!isDigits12(v)) throw new Error('closed');
@@ -54,11 +53,17 @@
     return el;
   }
 
+  // --- Scanner state ---
   let context, view, camera, barcodeCapture;
 
   async function open() {
     try {
-      if (!configured) { await configureOnce(); configured = true; }
+      if (!configured) {
+        if (!S()) throw new Error('Scandit global missing');
+        if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
+        await S().configure(LICENSE, { engineLocation: ENGINE_URL });
+        configured = true;
+      }
 
       return new Promise(async (resolve, reject) => {
         try {
@@ -67,15 +72,17 @@
             view    = await S().DataCaptureView.create(context);
             camera  = S().Camera.default;
 
+            // Recommended camera settings
             const camSettings = S().BarcodeCapture.recommendedCameraSettings;
             await camera.applySettings(camSettings);
             await context.setFrameSource(camera);
 
+            // Symbologies
             const settings = new S().BarcodeCaptureSettings();
             settings.enableSymbologies([
               S().Symbology.ean13Upca, // EAN-13 + UPC-A
-              S().Symbology.ean8,      // registered (we reject in logic)
-              S().Symbology.upce       // registered (we reject in logic)
+              S().Symbology.ean8,      // register but reject in logic
+              S().Symbology.upce       // register but reject in logic
             ]);
             settings.codeDuplicateFilter = 1000;
             barcodeCapture = await S().BarcodeCapture.create(context, settings);
@@ -104,7 +111,7 @@
                   normalized = normalizeToUpcA(data);
                   accept = !!normalized;
                 } else if (sym === S().Symbology.ean8 || sym === S().Symbology.upce) {
-                  accept = false; // TODO: add proper expansion if needed
+                  accept = false; // TODO: expand if/when we want these
                 }
 
                 if (!accept) {
@@ -136,7 +143,7 @@
         }
       });
     } catch (e) {
-      console.error('[Scanner] configure unavailable:', e?.message || e);
+      console.error('[Scanner] unavailable:', e?.message || e);
       return promptFallback();
     }
   }
