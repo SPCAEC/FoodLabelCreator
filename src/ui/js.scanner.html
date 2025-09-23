@@ -1,160 +1,45 @@
 <script>
 /**
- * Scandit Web (CDN bundle + CDN engine)
- * - Expects window.Scandit from the CDN <script> in Index.html.
- * - Configures on DOMContentLoaded using engineLocation.
- * - Built-in camera, recommended settings.
- * - Symbologies: EAN-13/UPC-A (accepted), EAN-8 + UPC-E (registered, rejected via logic for now).
- * - Exposes: window.Scanner.open() / close()
+ * Scanner Bridge (Render mini-app)
+ * - Opens popup to hosted scanner page
+ * - Passes SCANDIT license as query param
+ * - Listens for postMessage and re-emits a CustomEvent('upc-scanned')
  */
-(function () {
-  const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
-  const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-bundled@7.6.1/build/engine/';
 
-  const S = () => window.Scandit || null;
-  const isDigits12 = v => /^\d{12}$/.test(String(v || ''));
-  const normalizeToUpcA = v => {
-    const s = String(v || '').trim();
-    if (/^\d{12}$/.test(s)) return s;        // UPC-A
-    if (/^0\d{12}$/.test(s)) return s.slice(1); // EAN-13 w/ leading 0 -> UPC-A
-    return '';
-  };
+(function(){
+  // 🔧 Configure your Render origin + scanner URL
+  const SCANNER_ORIGIN = "https://scannerminiapp.onrender.com";
+  const SCANNER_URL    = SCANNER_ORIGIN + "/scanner.html";
 
-  let configured = false;
+  // License from Script Properties
+  const SCANDIT_LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
 
-  document.addEventListener('DOMContentLoaded', async () => {
-    try {
-      if (!S()) throw new Error('Scandit global missing (CDN script failed to load)');
-      if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
-      await S().configure(LICENSE, { engineLocation: ENGINE_URL });
-      configured = true;
-      console.log('[Scanner] configured via CDN');
-    } catch (e) {
-      console.warn('[Scanner] configure failed:', e?.message || e);
+  function openScannerPopup() {
+    const w = 520, h = 760;
+    const left = Math.max(0, (screen.width - w) / 2);
+    const top  = Math.max(0, (screen.height - h) / 2);
+    const url  = `${SCANNER_URL}?license=${encodeURIComponent(SCANDIT_LICENSE)}`;
+
+    window.open(
+      url,
+      "scanUPC",
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes`
+    );
+  }
+
+  // Secure message listener
+  window.addEventListener("message", (ev) => {
+    if (ev.origin !== SCANNER_ORIGIN) return; // security: only accept from your Render app
+    const data = ev.data || {};
+    if (data.type === "scandit:upc" && /^\d{12}$/.test(String(data.upc))) {
+      // Dispatch a CustomEvent so js.app can react without knowing about postMessage
+      window.dispatchEvent(new CustomEvent("upc-scanned", { detail: { upc: data.upc } }));
+    } else if (data.type === "scandit:cancel") {
+      window.dispatchEvent(new CustomEvent("upc-scan-canceled"));
     }
   });
 
-  // --- UI helpers ---
-  async function promptFallback(){
-    const v = window.prompt('Enter 12-digit UPC');
-    if (!isDigits12(v)) throw new Error('closed');
-    return String(v).trim();
-  }
-  function buildModal(){
-    const el = document.createElement('div');
-    el.id = 'scanModal';
-    el.className = 'card camera';
-    el.innerHTML = `
-      <div id="scanView" style="width:100%;height:65vh;border-radius:16px;overflow:hidden;"></div>
-      <div class="actions" style="margin-top:.75rem;">
-        <button class="btn ghost" id="closeScanBtn" type="button">Close Camera</button>
-      </div>`;
-    (document.querySelector('#screen') || document.body).prepend(el);
-    return el;
-  }
-
-  // --- Scanner state ---
-  let context, view, camera, barcodeCapture;
-
-  async function open() {
-    try {
-      if (!configured) {
-        if (!S()) throw new Error('Scandit global missing');
-        if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
-        await S().configure(LICENSE, { engineLocation: ENGINE_URL });
-        configured = true;
-      }
-
-      return new Promise(async (resolve, reject) => {
-        try {
-          if (!context) {
-            context = await S().DataCaptureContext.create();
-            view    = await S().DataCaptureView.create(context);
-            camera  = S().Camera.default;
-
-            // Recommended camera settings
-            const camSettings = S().BarcodeCapture.recommendedCameraSettings;
-            await camera.applySettings(camSettings);
-            await context.setFrameSource(camera);
-
-            // Symbologies
-            const settings = new S().BarcodeCaptureSettings();
-            settings.enableSymbologies([
-              S().Symbology.ean13Upca, // EAN-13 + UPC-A
-              S().Symbology.ean8,      // register but reject in logic
-              S().Symbology.upce       // register but reject in logic
-            ]);
-            settings.codeDuplicateFilter = 1000;
-            barcodeCapture = await S().BarcodeCapture.create(context, settings);
-
-            const overlay = S().BarcodeCaptureOverlay.withBarcodeCaptureForView(barcodeCapture, view);
-            overlay.viewfinder = new S().RectangularViewfinder();
-          }
-
-          const modal = buildModal();
-          const mount = modal.querySelector('#scanView');
-          await view.connectToElement(mount);
-
-          const listener = {
-            didScan: async (_, session) => {
-              const list = session.newlyRecognizedBarcodes || [];
-              if (!list.length) return;
-
-              for (const b of list) {
-                const sym  = b.symbology;
-                const data = (b.data || '').trim();
-
-                let normalized = '';
-                let accept = false;
-
-                if (sym === S().Symbology.ean13Upca) {
-                  normalized = normalizeToUpcA(data);
-                  accept = !!normalized;
-                } else if (sym === S().Symbology.ean8 || sym === S().Symbology.upce) {
-                  accept = false; // TODO: expand if/when we want these
-                }
-
-                if (!accept) {
-                  if (typeof session.rejectCode === 'function') session.rejectCode(b);
-                  else if (typeof session.rejectBarcode === 'function') session.rejectBarcode(b);
-                  continue;
-                }
-
-                try { await barcodeCapture.setEnabled(false); } catch(_) {}
-                try { await camera.switchToDesiredState(S().FrameSourceState.Off); } catch(_) {}
-                close();
-                return resolve(normalized);
-              }
-            }
-          };
-          await barcodeCapture.addListener(listener);
-
-          await camera.switchToDesiredState(S().FrameSourceState.On);
-          await barcodeCapture.setEnabled(true);
-
-          modal.querySelector('#closeScanBtn').onclick = () => {
-            close();
-            reject(new Error('closed'));
-          };
-        } catch (err) {
-          console.error('[Scanner] init error:', err);
-          try { close(); } catch(_) {}
-          try { resolve(await promptFallback()); } catch(_) { reject(err); }
-        }
-      });
-    } catch (e) {
-      console.error('[Scanner] unavailable:', e?.message || e);
-      return promptFallback();
-    }
-  }
-
-  function close() {
-    try { barcodeCapture && barcodeCapture.setEnabled(false); } catch(_) {}
-    try { camera && S() && camera.switchToDesiredState(S().FrameSourceState.Off); } catch(_) {}
-    const modal = document.getElementById('scanModal');
-    if (modal) modal.remove();
-  }
-
-  window.Scanner = { open, close };
+  // Expose a tiny API for your button handler
+  window.MiniScanner = { open: openScannerPopup };
 })();
 </script>

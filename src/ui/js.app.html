@@ -38,6 +38,38 @@
   el.style.display = on ? 'inline-block' : 'none';
   }
 
+  // Listen for UPC from the Render mini-app (scanner-bridge emits this)
+  window.addEventListener('upc-scanned', async (ev) => {
+    const upc = ev.detail?.upc || '';
+    const status = document.querySelector('#launchInfo');
+    const load   = document.querySelector('#launchLoad');
+    const input  = document.querySelector('#upcInput');
+    const lookupBtn = document.querySelector('#lookupBtn');
+
+    if (input) input.value = upc;
+    if (lookupBtn) lookupBtn.disabled = !/^\d{12}$/.test(upc);
+
+    setMsg(status, 'Scanned ✓ Looking up…', 'success');
+    spinner(true, load);
+
+    try {
+      // use your existing flow
+      state.upc = upc;
+      await doLookup(status, load);
+    } catch (e) {
+      console.error(e);
+      setMsg(status, 'Scan/lookup failed. Try again.', 'error');
+    } finally {
+      spinner(false, load);
+    }
+  });
+
+  // Optional: handle cancel (no-op or toast)
+  window.addEventListener('upc-scan-canceled', () => {
+    const status = document.querySelector('#launchInfo');
+    if (status) setMsg(status, 'Scanner closed.', null);
+  });
+
   // ------- Global state -------
   const state = {
     step: 'launch',
@@ -82,28 +114,11 @@
   });
 
   // Scan
-  scanBtn.addEventListener('click', async () => {
-    setMsg(status, 'Opening camera…', null);
-    spinner(true, load);
-    try{
-      const upc = await Scanner.open();  // from js.scanner.html
-      state.upc = upc;
-      upcInput.value = upc;
-      updateLookupBtn();
-      setMsg(status, 'Scanned ✓ Looking up…', 'success');
-      await doLookup(status, load);
-    }catch(err){
-      if (String(err||'').includes('closed')) {
-        setMsg(status, 'Camera closed. You can type the UPC or try scanning again.', null);
-      } else {
-        console.error(err);
-        setMsg(status, 'Scan failed. Try again or type the UPC.', 'error');
-      }
-    }finally{
-      spinner(false, load);
-      try { Scanner.close(); } catch(e){}
-    }
-  });
+  scanBtn.addEventListener('click', () => {
+  // No spinner here; the popup handles UX. We’ll set state when we get a result.
+  setMsg(status, 'Opening scanner…', null);
+  window.MiniScanner.open();
+  }); 
 
   // Clear button
   clearBtn?.addEventListener('click', () => {

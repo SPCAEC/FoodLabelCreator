@@ -8,9 +8,6 @@
 
   <!-- Kiosk styles -->
   <?!= include('ui/css.kiosk'); ?>
-
-  <!-- Load Scandit bundled (Core+Barcode) directly from CDN in the BROWSER -->
-  <script src="https://cdn.jsdelivr.net/npm/@scandit/web-datacapture-bundled@7.6.1/build/js/index.min.js"></script>
 </head>
 <body>
   <main class="app">
@@ -29,7 +26,7 @@
 
   <!-- App scripts (order matters) -->
   <?!= include('ui/js.api'); ?>
-  <?!= include('ui/js.scanner'); ?>
+  <?!= include('ui/js.scanner-bridge'); ?>  <!-- NEW: popup + postMessage bridge -->
   <?!= include('ui/js.app'); ?>
 
   <!-- Views -->
