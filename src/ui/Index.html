@@ -9,12 +9,8 @@
   <!-- Kiosk styles -->
   <?!= include('ui/css.kiosk'); ?>
 
-  <!-- Expose absolute base URL for same-origin references -->
-  <script>window.APP_BASE = "<?= baseUrl ?>";</script>
-
-  <!-- Inline Scandit bundle (Core+Barcode).
-       This comes from Code.gs → doGet → ?static=scandit-index -->
-  <script src="<?= baseUrl ?>?static=scandit-index&v=<?= cacheBust ?>"></script>
+  <!-- Inline Scandit bundle first so window.Scandit exists before scanner code -->
+  <script><?!= scanditBundleInline() ?></script>
 </head>
 <body>
   <main class="app">
@@ -26,7 +22,6 @@
       </p>
     </header>
 
-    <!-- Screen host + live region -->
     <div id="screen"></div>
     <div id="toast" class="msg" role="status" aria-live="polite"></div>
   </main>
