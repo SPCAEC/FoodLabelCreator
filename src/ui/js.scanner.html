@@ -1,21 +1,15 @@
 <script>
 /**
- * Scandit scanner (bundled) with resilient, self-booting loader.
- * - Logs environment on load.
- * - Immediately ensures Scandit global and configure() without relying on DOM events.
- * - Load order: inline/global -> same-origin (?static=scandit-index) -> CDN.
- * - Disables AMD/CommonJS temporarily so the SDK attaches to window.
- * - Built-in camera, recommended settings, retail symbologies, reject unwanted codes.
- * - Exposes window.Scanner.open() / close().
+ * Scandit Web (inline-bundle + CDN engine)
+ * - Assumes window.Scandit is already defined by Index.html inline bundle.
+ * - Configures immediately; falls back to prompt if configuration not possible.
+ * - Built-in camera, recommended settings, EAN-13/UPC-A + EAN-8 + UPC-E (reject EAN-8/UPC-E for now).
+ * - Exposes: window.Scanner.open() / close()
  */
 (function () {
-  // ----- Config -----
   const LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
   const ENGINE_URL = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/engine/';
-  const CDN_BUNDLE  = 'https://cdn.jsdelivr.net/npm/scandit-web-datacapture-bundled@7.6.1/build/js/index.min.js';
-  const ORIGIN_BUNDLE = (window.APP_BASE ? `${window.APP_BASE}?static=scandit-index` : null);
 
-  // ----- Basic helpers -----
   const S = () => window.Scandit || null;
   const isDigits12 = v => /^\d{12}$/.test(String(v || ''));
   const normalizeToUpcA = s => {
@@ -25,88 +19,29 @@
     return '';
   };
 
-  // ----- Logging on load -----
-  console.log('[Scanner] boot', {
-    hasScandit: !!S(),
-    APP_BASE: window.APP_BASE || '(undefined)',
-    ORIGIN_BUNDLE,
-    CDN_BUNDLE,
-    hasLicense: !!String(LICENSE).trim()
-  });
+  console.log('[Scanner] boot: hasScandit=', !!S(), 'license=', !!String(LICENSE).trim());
 
-  // Load a script ensuring it exports to window (disable AMD/CommonJS temporarily)
-  function loadScriptForceGlobal(src) {
-    return new Promise((resolve, reject) => {
-      const prevDefine  = window.define;
-      const prevModule  = window.module;
-      const prevExports = window.exports;
-      const hadAMD = !!(prevDefine && prevDefine.amd);
-
-      try {
-        if (hadAMD)      { try { delete window.define;  } catch(_) { window.define  = undefined; } }
-        if (prevModule)  { try { delete window.module;  } catch(_) { window.module  = undefined; } }
-        if (prevExports) { try { delete window.exports; } catch(_) { window.exports = undefined; } }
-      } catch (_) {}
-
-      const s = document.createElement('script');
-      s.src = src;
-      s.async = true;
-      s.onload = () => {
-        if (hadAMD) window.define = prevDefine;
-        if (prevModule) window.module = prevModule;
-        if (prevExports) window.exports = prevExports;
-        resolve();
-      };
-      s.onerror = () => {
-        if (hadAMD) window.define = prevDefine;
-        if (prevModule) window.module = prevModule;
-        if (prevExports) window.exports = prevExports;
-        reject(new Error(`Failed to load ${src}`));
-      };
-      document.head.appendChild(s);
-    });
+  async function configureOnce() {
+    if (!S()) throw new Error('Scandit global missing (inline bundle did not run)');
+    if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
+    await S().configure(LICENSE, { engineLocation: ENGINE_URL });
+    console.log('[Scanner] configured OK');
   }
 
-  async function ensureScandit() {
-    if (S()) return true;
+  // Kick configuration ASAP (no DOM event dependency)
+  let configured = false;
+  (async () => {
+    try { await configureOnce(); configured = true; }
+    catch (e) { console.warn('[Scanner] early configure failed:', e?.message || e); }
+  })();
 
-    const sources = [ORIGIN_BUNDLE, CDN_BUNDLE].filter(Boolean);
-    for (const src of sources) {
-      try {
-        console.warn('[Scanner] Scandit missing; loading:', src);
-        await loadScriptForceGlobal(src);
-        console.log('[Scanner] bundle loaded; Scandit present?', !!S());
-        if (S()) return true;
-      } catch (e) {
-        console.warn('[Scanner] load failed:', e.message || e);
-      }
-    }
-    return !!S();
-  }
-
-  async function configureIfNeeded() {
-    try {
-      if (!(await ensureScandit())) throw new Error('Scandit global missing after loads');
-      if (!String(LICENSE).trim()) throw new Error('Missing SCANDIT_LICENSE');
-      await S().configure(LICENSE, { engineLocation: ENGINE_URL });
-      console.log('[Scanner] configured OK');
-      return true;
-    } catch (e) {
-      console.warn('[Scanner] configure failed:', e?.message || e);
-      return false;
-    }
-  }
-
-  // ----- Self-boot: ensure + configure right away (no DOM event dependency) -----
-  (async () => { await configureIfNeeded(); })();
-
-  // ----- UI helpers -----
-  async function promptFallback() {
+  // --- UI helpers & state ---
+  async function promptFallback(){
     const v = window.prompt('Enter 12-digit UPC');
     if (!isDigits12(v)) throw new Error('closed');
     return String(v).trim();
   }
-  function buildModal() {
+  function buildModal(){
     const el = document.createElement('div');
     el.id = 'scanModal';
     el.className = 'card camera';
@@ -119,31 +54,28 @@
     return el;
   }
 
-  // ----- Scanner state -----
   let context, view, camera, barcodeCapture;
 
   async function open() {
     try {
-      // If for any reason we’re not configured yet, do it now.
-      await configureIfNeeded();
+      if (!configured) { await configureOnce(); configured = true; }
 
       return new Promise(async (resolve, reject) => {
         try {
-          // One-time init
           if (!context) {
             context = await S().DataCaptureContext.create();
             view    = await S().DataCaptureView.create(context);
             camera  = S().Camera.default;
 
-            const cs = S().BarcodeCapture.recommendedCameraSettings;
-            await camera.applySettings(cs);
+            const camSettings = S().BarcodeCapture.recommendedCameraSettings;
+            await camera.applySettings(camSettings);
             await context.setFrameSource(camera);
 
             const settings = new S().BarcodeCaptureSettings();
             settings.enableSymbologies([
-              S().Symbology.ean13Upca,
-              S().Symbology.ean8,
-              S().Symbology.upce
+              S().Symbology.ean13Upca, // EAN-13 + UPC-A
+              S().Symbology.ean8,      // registered (we reject in logic)
+              S().Symbology.upce       // registered (we reject in logic)
             ]);
             settings.codeDuplicateFilter = 1000;
             barcodeCapture = await S().BarcodeCapture.create(context, settings);
@@ -165,14 +97,14 @@
                 const sym  = b.symbology;
                 const data = (b.data || '').trim();
 
-                let accept = false;
                 let normalized = '';
+                let accept = false;
 
                 if (sym === S().Symbology.ean13Upca) {
                   normalized = normalizeToUpcA(data);
                   accept = !!normalized;
                 } else if (sym === S().Symbology.ean8 || sym === S().Symbology.upce) {
-                  accept = false; // reject until we implement expansion
+                  accept = false; // TODO: add proper expansion if needed
                 }
 
                 if (!accept) {
@@ -181,8 +113,8 @@
                   continue;
                 }
 
-                try { await barcodeCapture.setEnabled(false); } catch (_) {}
-                try { await camera.switchToDesiredState(S().FrameSourceState.Off); } catch (_) {}
+                try { await barcodeCapture.setEnabled(false); } catch(_) {}
+                try { await camera.switchToDesiredState(S().FrameSourceState.Off); } catch(_) {}
                 close();
                 return resolve(normalized);
               }
@@ -199,19 +131,19 @@
           };
         } catch (err) {
           console.error('[Scanner] init error:', err);
-          try { close(); } catch (_) {}
-          try { resolve(await promptFallback()); } catch (_) { reject(err); }
+          try { close(); } catch(_) {}
+          try { resolve(await promptFallback()); } catch(_) { reject(err); }
         }
       });
     } catch (e) {
-      console.error('[Scanner] bundle unavailable:', e?.message || e);
+      console.error('[Scanner] configure unavailable:', e?.message || e);
       return promptFallback();
     }
   }
 
   function close() {
-    try { barcodeCapture && barcodeCapture.setEnabled(false); } catch (_) {}
-    try { camera && S() && camera.switchToDesiredState(S().FrameSourceState.Off); } catch (_) {}
+    try { barcodeCapture && barcodeCapture.setEnabled(false); } catch(_) {}
+    try { camera && S() && camera.switchToDesiredState(S().FrameSourceState.Off); } catch(_) {}
     const modal = document.getElementById('scanModal');
     if (modal) modal.remove();
   }
