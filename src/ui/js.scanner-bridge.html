@@ -1,0 +1,179 @@
+<script>
+/**
+ * Scanner Bridge for Render mini-app
+ * ----------------------------------
+ * Opens: https://scannerminiapp.onrender.com/scanner.html?license=...
+ * Receives: postMessage({ type: "scandit:upc", upc }) or { type: "scandit:cancel" }
+ *
+ * Exposes:
+ *   - window.Scanner.open(): Promise<string>  // resolves 12-digit UPC, rejects on cancel/close
+ *   - window.MiniScanner.open(): void         // fire-and-forget (use with global event below)
+ *   - window.MiniScanner.openModal(): void    // optional inline iframe modal
+ *   - CustomEvent('upc-scanned', { detail: { upc } })
+ *   - CustomEvent('upc-scan-canceled')
+ */
+
+(function () {
+  // ----- CONFIG -----
+  const SCANNER_ORIGIN = "https://scannerminiapp.onrender.com";
+  // If your scanner is at the root (/) instead of /scanner.html, change the next line accordingly:
+  const SCANNER_URL    = SCANNER_ORIGIN + "/scanner.html";
+
+  // Pull Scandit license from Script Properties
+  const SCANDIT_LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
+
+  // ----- INTERNAL STATE -----
+  let pending = null;   // { win, resolve, reject, poll }
+  let modalOpen = false;
+
+  // ----- UTIL -----
+  function buildScannerUrl() {
+    const sep = SCANNER_URL.includes("?") ? "&" : "?";
+    return `${SCANNER_URL}${sep}license=${encodeURIComponent(SCANDIT_LICENSE)}`;
+  }
+
+  function cleanupPending() {
+    if (!pending) return;
+    try { clearInterval(pending.poll); } catch(_) {}
+    try { pending.win && !pending.win.closed && pending.win.close(); } catch(_) {}
+    pending = null;
+  }
+
+  function dispatchResult(upc) {
+    window.dispatchEvent(new CustomEvent("upc-scanned", { detail: { upc } }));
+  }
+  function dispatchCancel() {
+    window.dispatchEvent(new CustomEvent("upc-scan-canceled"));
+  }
+
+  // ----- POPUP FLOW (Promise-based) -----
+  function openPopupPromise() {
+    // Ensure only one active popup promise at a time
+    if (pending) cleanupPending();
+
+    return new Promise((resolve, reject) => {
+      const w = 520, h = 760;
+      const left = Math.max(0, (screen.width  - w) / 2);
+      const top  = Math.max(0, (screen.height - h) / 2);
+      const url  = buildScannerUrl();
+
+      const win = window.open(
+        url,
+        "scanUPC",
+        `width=${w},height=${h},left=${left},top=${top},resizable=yes`
+      );
+      if (!win) {
+        reject(new Error("popup_blocked"));
+        return;
+      }
+
+      pending = { win, resolve, reject, poll: null };
+
+      // Detect user-closed popup
+      pending.poll = setInterval(() => {
+        try {
+          if (!pending || !pending.win) return;
+          if (pending.win.closed) {
+            clearInterval(pending.poll);
+            const rej = pending.reject;
+            cleanupPending();
+            dispatchCancel();
+            rej(new Error("closed"));
+          }
+        } catch(_) {}
+      }, 400);
+    });
+  }
+
+  // ----- INLINE MODAL (iframe) -----
+  function openModal() {
+    if (modalOpen) return;
+    modalOpen = true;
+
+    const url = buildScannerUrl();
+    const wrap = document.createElement('div');
+    wrap.id = 'scannerModal';
+    wrap.setAttribute('role', 'dialog');
+    wrap.setAttribute('aria-modal', 'true');
+    wrap.style.cssText = [
+      'position:fixed','inset:0','background:rgba(0,0,0,.5)',
+      'display:grid','place-items:center','z-index:9999'
+    ].join(';');
+
+    wrap.innerHTML = `
+      <div style="width:min(96vw,520px);height:80vh;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.25)">
+        <div style="display:flex;justify-content:flex-end;padding:8px">
+          <button id="scannerCloseBtn" class="btn ghost" type="button" style="margin-right:8px">Close</button>
+        </div>
+        <iframe
+          id="scannerFrame"
+          src="${url}"
+          style="width:100%;height:calc(100% - 48px);border:0"
+          allow="camera *; microphone *"
+        ></iframe>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+    document.getElementById('scannerCloseBtn').onclick = closeModal;
+  }
+
+  function closeModal() {
+    const m = document.getElementById('scannerModal');
+    if (m) m.remove();
+    modalOpen = false;
+  }
+
+  // ----- MESSAGE HANDLER (SECURE ORIGIN) -----
+  window.addEventListener("message", (ev) => {
+    if (ev.origin !== SCANNER_ORIGIN) return;
+
+    const data = ev.data || {};
+    if (data.type === "scandit:upc" && /^\d{12}$/.test(String(data.upc))) {
+      // Resolve any pending popup promise
+      if (pending) {
+        const res = pending.resolve;
+        cleanupPending();
+        res(String(data.upc));
+      }
+      // Fire global event for fire-and-forget flows
+      dispatchResult(String(data.upc));
+      closeModal();
+      return;
+    }
+
+    if (data.type === "scandit:cancel") {
+      if (pending) {
+        const rej = pending.reject;
+        cleanupPending();
+        rej(new Error("canceled"));
+      }
+      dispatchCancel();
+      closeModal();
+      return;
+    }
+  });
+
+  // ----- PUBLIC APIs -----
+  // Promise API (backwards-compatible with previous Scanner.open() usage)
+  async function scannerOpen() {
+    return openPopupPromise();
+  }
+
+  // Fire-and-forget API (use with the 'upc-scanned' event)
+  function miniOpen() {
+    // best used directly inside a click handler (user gesture) to avoid blockers
+    openPopupPromise().catch(() => {/* handled by global events */});
+  }
+
+  // Expose both, so old code that called Scanner.open() keeps working,
+  // and new code can use MiniScanner.open() + global CustomEvents.
+  window.Scanner = { open: scannerOpen, close: () => {} };
+  window.MiniScanner = {
+    open: miniOpen,
+    openModal,
+    closeModal,
+    get origin(){ return SCANNER_ORIGIN; },
+    get url(){ return SCANNER_URL; }
+  };
+})();
+</script>
