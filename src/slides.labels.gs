@@ -17,7 +17,10 @@ function buildSpeciesDisplay_(species, lifestage) {
 function generateLabelPDF_(payload) {
   if (!payload) throw new Error('generateLabelPDF_: missing payload');
 
-  // Determine template
+  const normUPC = normalizeUPC_(payload.upc || '');
+  const nameStamp = Date.now();
+
+  // Determine template kind
   const kind = String(
     (payload.type) ||
     (payload.slides && payload.slides.templateKind) ||
@@ -28,30 +31,35 @@ function generateLabelPDF_(payload) {
     : CFG.SLIDES_TEMPLATE_FOOD_ID;
 
   // Open working copy
-  const nameStamp = Date.now();
-  const copy = DriveApp.getFileById(templateId).makeCopy('Label_' + (payload.upc || 'unknown') + '_' + nameStamp);
+  const copyName = `Label_${normUPC || 'unknown'}_${nameStamp}`;
+  const copy = DriveApp.getFileById(templateId).makeCopy(copyName);
   const pres = SlidesApp.openById(copy.getId());
 
   // Build placeholder map
-  var placeholders = (payload.slides && payload.slides.placeholders) ? payload.slides.placeholders : {
-    '{{Species}}': buildSpeciesDisplay_(payload.species, payload.lifestage),
-    '{{Brand}}': payload.brand || '',
-    '{{ProductName}}': payload.productName || '',
-    '{{Flavor}}': payload.flavor || '',
-    '{{Expiration}}': payload.expiration || '', // mm/dd/yyyy from UI
-    '{{Ingredients}}': payload.ingredients || ''
-  };
-
-  // Optionally support {{upc}} if present in template
-  if (payload.upc && placeholders['{{upc}}'] === undefined && placeholders['{{UPC}}'] === undefined) {
-    placeholders['{{upc}}'] = String(payload.upc);
+  let placeholders = {};
+  if (payload.slides && typeof payload.slides.placeholders === 'object') {
+    placeholders = payload.slides.placeholders;
+  } else {
+    placeholders = {
+      '{{Species}}': buildSpeciesDisplay_(payload.species, payload.lifestage),
+      '{{Brand}}': payload.brand || '',
+      '{{ProductName}}': payload.productName || '',
+      '{{Flavor}}': payload.flavor || '',
+      '{{Expiration}}': payload.expiration || '',
+      '{{Ingredients}}': payload.ingredients || ''
+    };
   }
 
-  // Replace across all slides
+  // Support {{upc}} or {{UPC}} if needed
+  if (normUPC && placeholders['{{upc}}'] === undefined && placeholders['{{UPC}}'] === undefined) {
+    placeholders['{{upc}}'] = normUPC;
+  }
+
+  // Replace placeholders on all slides
   const slides = pres.getSlides();
-  for (var i = 0; i < slides.length; i++) {
-    var slide = slides[i];
-    for (var key in placeholders) {
+  for (let i = 0; i < slides.length; i++) {
+    const slide = slides[i];
+    for (const key in placeholders) {
       if (placeholders.hasOwnProperty(key)) {
         slide.replaceAllText(key, String(placeholders[key] || ''));
       }
@@ -60,14 +68,22 @@ function generateLabelPDF_(payload) {
 
   pres.saveAndClose();
 
-  // Export to PDF and store
+  // Export to PDF
   const blob = DriveApp.getFileById(copy.getId()).getAs('application/pdf');
-  const outFile = DriveApp.getFolderById(CFG.OUTPUT_FOLDER_ID) // <-- corrected key
+  const outFile = DriveApp.getFolderById(CFG.OUTPUT_PDF_FOLDER_ID) // ✅ corrected key
     .createFile(blob)
-    .setName('Label_' + (payload.upc || 'unknown') + '_' + nameStamp + '.pdf');
+    .setName(copyName + '.pdf');
 
   // Clean up slide copy
   DriveApp.getFileById(copy.getId()).setTrashed(true);
+
+  // Log success
+  logI('Label generated', {
+    kind,
+    upc: normUPC,
+    fileId: outFile.getId(),
+    name: outFile.getName()
+  });
 
   return {
     fileId: outFile.getId(),

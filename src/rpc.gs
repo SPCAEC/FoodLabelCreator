@@ -47,7 +47,7 @@ function findByUPCInSheet_(upc12) {
 
 /** Lookup by UPC. Accepts a string or { upc } from the client. */
 function apiLookup(payload) {
-  try {
+  return rpcTry(() => {
     const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
     const upc = normalizeUPC_(raw);
     if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
@@ -56,22 +56,18 @@ function apiLookup(payload) {
     if (!rec) return { found: false, upc };
 
     return { found: true, upc, item: rec };
-  } catch (e) {
-    // Don’t throw; return a safe error for the client
-    return { found: false, reason: 'exception', message: String(e && e.message || e) };
-  }
+  });
 }
 
 /* ---------- Create label ---------- */
 
 /** Preferred endpoint used by the new client code. */
 function apiCreateLabels(payload) {
-  try {
-    if (!payload) return { error: true, message: 'Missing payload' };
+  return rpcTry(() => {
+    if (!payload) throw new Error('Missing payload');
     const upc = normalizeUPC_(payload.upc);
-    if (!upc) return { error: true, message: 'Invalid UPC' };
+    if (!upc) throw new Error('Invalid UPC');
 
-    // Build the record to upsert from payload.sheetRecord if present, otherwise from payload fields
     const record = payload.sheetRecord || {
       UPC: upc,
       Species: payload.species || payload.Species || '',
@@ -83,16 +79,11 @@ function apiCreateLabels(payload) {
       Ingredients: payload.ingredients || payload.Ingredients || ''
     };
 
-    // Generate labels PDF (your existing implementation)
-    const pdf = generateLabelPDF_(payload); // should return { url, fileId } at least
-
-    // Upsert to the sheet (your existing function). Consider including pdf info.
+    const pdf = generateLabelPDF_(payload);
     const row = upsertRecord({ ...record, pdfFileId: pdf.fileId, pdfUrl: pdf.url });
 
-    return { ok: true, pdfUrl: pdf.url, fileId: pdf.fileId, row };
-  } catch (e) {
-    return { error: true, message: String(e && e.message || e) };
-  }
+    return { pdfUrl: pdf.url, fileId: pdf.fileId, row };
+  });
 }
 
 /** Backward compatibility for older client calls. */
@@ -103,34 +94,25 @@ function apiSaveAndCreateLabel(payload) {
 /* ---------- Image uploads (optional; normalize UPC) ---------- */
 
 function apiUploadFront(upc, dataUrl) {
-  try {
+  return rpcTry(() => {
     const n = normalizeUPC_(upc);
-    if (!n || !dataUrl) return { error: true, message: 'Missing image or UPC' };
+    if (!n || !dataUrl) throw new Error('Missing image or UPC');
     const f = saveImage_(n, dataUrl, 'front');
-    return { ok: true, file: f };
-  } catch (e) {
-    return { error: true, message: String(e && e.message || e) };
-  }
+    return { file: f };
+  });
 }
 
 function apiUploadIngredients(upc, dataUrl) {
-  try {
+  return rpcTry(() => {
     const n = normalizeUPC_(upc);
-    if (!n || !dataUrl) return { error: true, message: 'Missing image or UPC' };
+    if (!n || !dataUrl) throw new Error('Missing image or UPC');
     const f = saveImage_(n, dataUrl, 'ingredients');
-    return { ok: true, file: f };
-  } catch (e) {
-    return { error: true, message: String(e && e.message || e) };
-  }
+    return { file: f };
+  });
 }
 
 /* ---------- AI extraction ---------- */
 /** New client sends API.extract(front?, ingredients?) → apiExtractFromImages({ front, ingredients }) */
 function apiExtractFromImages(req) {
-  try {
-    const out = aiExtract_(req); // your existing function
-    return out;                  // expected to be { ok:true, item:{...}, needs:{...} } or similar
-  } catch (e) {
-    return { ok: false, message: String(e && e.message || e) };
-  }
+  return rpcTry(() => aiExtract_(req));
 }

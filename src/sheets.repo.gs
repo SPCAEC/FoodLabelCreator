@@ -1,8 +1,10 @@
 /** Sheets read/write for UPC database */
+
 function sh_(){ return SpreadsheetApp.openById(CFG.SHEET_ID).getSheetByName(CFG.SHEET_NAME); }
 
 function getHeaders_(){
-  const row = sh_().getRange(1,1,1, sh_().getLastColumn()).getValues()[0];
+  const sh = sh_();  // cache it
+  const row = sh.getRange(1,1,1, sh.getLastColumn()).getValues()[0];
   const map = {};
   row.forEach((h,i)=> map[String(h).trim()] = i+1);
   return map;
@@ -13,8 +15,10 @@ function findRowByUPC_(upc){
   const data = sh.getDataRange().getValues();
   const h = getHeaders_();
   const col = h[COL.UPC];
-  for (let r=2; r<=data.length; r++){
-    if (String(data[r-1][col-1]).trim() === String(upc)) return r;
+  const normTarget = normalizeUPC_(upc);
+  for (let r = 2; r <= data.length; r++) {
+    const candidate = normalizeUPC_(data[r - 1][col - 1]);
+    if (candidate === normTarget) return r;
   }
   return -1;
 }
@@ -38,11 +42,15 @@ function readByUPC(upc){
     pdfUrl: val(COL.PDF_URL),
     frontPhotoId: val(COL.FRONT_PHOTO_ID),
     ingPhotoId: val(COL.ING_PHOTO_ID),
+    createdAt: val(COL.CREATED_AT),
     _row: r,
   };
 }
 
 function upsertRecord(payload){
+  if (!payload || typeof payload !== 'object') {
+  throw new Error('upsertRecord: missing or invalid payload');
+  }
   const sh = sh_(); const h = getHeaders_();
   const r = findRowByUPC_(payload.upc);
   const now = new Date();
