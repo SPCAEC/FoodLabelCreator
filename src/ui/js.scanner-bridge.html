@@ -66,6 +66,8 @@ window.MiniScanner = (() => {
         max-height: 80%;
         border-radius: 16px;
         box-shadow: 0 0 20px #000;
+        opacity: 0;
+        transition: opacity 0.4s ease-in-out;
       `;
 
       mount.innerHTML = ''; // clear previous contents
@@ -75,6 +77,12 @@ window.MiniScanner = (() => {
       videoEl.srcObject = stream;
       videoStream = stream;
       await videoEl.play();
+      await new Promise(r => setTimeout(r, 200)); // Let camera warm up
+
+      // Fade in the preview
+      requestAnimationFrame(() => {
+        videoEl.style.opacity = 1;
+      });
 
       running = true;
       detectLoop(detector);
