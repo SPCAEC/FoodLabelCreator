@@ -117,7 +117,7 @@
       } else {
         state.item = null;
         navigate('screenNew');
-        setTimeout(renderNewItem, 0);
+        setTimeout(() => navigate('screenNew'), 0);
       }
       setMsg(statusEl, '');
     } catch(err){

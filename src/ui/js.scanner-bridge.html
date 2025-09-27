@@ -1,137 +1,131 @@
 <script>
-/**
- * MiniScanner (Chrome BarcodeDetector version)
- * - Modal with live video preview
- * - Emits `upc-scanned` or `upc-scan-canceled`
- */
-
-window.MiniScanner = (function(){
-  let stream = null;
-  let scannerModal = null;
+window.MiniScanner = (() => {
+  let videoStream = null;
   let videoEl = null;
-  let overlay = null;
-  let detector = null;
-  let scanning = false;
+  let running = false;
+  let mount = null;
+
+  function ensureMount() {
+    mount = document.getElementById('scannerMount');
+    if (!mount) {
+      mount = document.createElement('div');
+      mount.id = 'scannerMount';
+      mount.style.cssText = `
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.85);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        padding: 1rem;
+      `;
+      document.body.appendChild(mount);
+    }
+  }
+
+  function createCancelButton() {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn secondary';
+    cancelBtn.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      font-size: 16px;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      z-index: 10000;
+    `;
+    cancelBtn.addEventListener('click', () => {
+      stop();
+      window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
+    });
+    return cancelBtn;
+  }
 
   async function open(){
     if (!('BarcodeDetector' in window)) {
-      alert('BarcodeDetector not supported on this device.');
+      alert('Barcode scanning is not supported on this device or browser.\nPlease enter the UPC manually.');
       return;
     }
 
-    close(); // Cleanup any previous instances
-    buildUI();
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      const detector = new BarcodeDetector({ formats: ['ean_13'] });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+
+      ensureMount();
+
+      videoEl = document.createElement('video');
+      videoEl.setAttribute('autoplay', '');
+      videoEl.setAttribute('playsinline', '');
+      videoEl.style.cssText = `
+        width: 100%;
+        height: auto;
+        max-height: 80%;
+        border-radius: 16px;
+        box-shadow: 0 0 20px #000;
+      `;
+
+      mount.innerHTML = ''; // clear previous contents
+      mount.appendChild(videoEl);
+      mount.appendChild(createCancelButton());
+
       videoEl.srcObject = stream;
-      videoEl.play();
-      scanning = true;
-      detectLoop();
+      videoStream = stream;
+      await videoEl.play();
+
+      running = true;
+      detectLoop(detector);
     } catch (err) {
-      console.error('Camera error:', err);
-      emitCanceled();
+      console.error('[MiniScanner.open] error:', err);
+      alert('Unable to access the camera for barcode scanning.');
+      window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
     }
   }
 
-  function close(){
-    scanning = false;
-    if (detector) detector = null;
-    if (videoEl) videoEl.pause();
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
-    }
-    if (scannerModal) scannerModal.remove();
-    scannerModal = null;
-  }
-
-  async function detectLoop(){
-    if (!scanning) return;
-    try {
-      if (!detector) detector = new BarcodeDetector({ formats: ['upc_a', 'ean_13'] });
-      const results = await detector.detect(videoEl);
-      if (results.length > 0) {
-        const raw = results[0].rawValue || '';
-        const upc = normalize(raw);
-        if (upc) {
-          emitScanned(upc);
-          return close();
+  async function detectLoop(detector){
+    while (running) {
+      try {
+        const barcodes = await detector.detect(videoEl);
+        if (barcodes.length > 0) {
+          const code = barcodes[0]?.rawValue?.trim() || '';
+          if (/^\d{12}$/.test(code)) {
+            stop();
+            window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc: code } }));
+            return;
+          }
         }
+        await new Promise(r => setTimeout(r, 300));
+      } catch (err) {
+        console.warn('[MiniScanner.detectLoop] error:', err);
+        break;
       }
-    } catch (err) {
-      console.warn('Scan error:', err);
     }
-    requestAnimationFrame(detectLoop);
-  }
 
-  function normalize(val){
-    const s = String(val || '').replace(/\D/g, '');
-    if (s.length === 13 && s[0] === '0') return s.slice(1); // EAN-13 → UPC-A
-    if (s.length === 12) return s;
-    return '';
-  }
-
-  function emitScanned(upc){
-    window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc } }));
-  }
-
-  function emitCanceled(){
+    stop();
     window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
   }
 
-  function buildUI(){
-    scannerModal = document.createElement('div');
-    scannerModal.className = 'scanner-modal';
-
-    overlay = document.createElement('div');
-    overlay.className = 'overlay';
-
-    videoEl = document.createElement('video');
-    videoEl.setAttribute('autoplay', '');
-    videoEl.setAttribute('playsinline', '');
-    videoEl.className = 'preview';
-
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'btn secondary';
-    closeBtn.textContent = 'Cancel';
-    closeBtn.onclick = () => {
-      emitCanceled();
-      close();
-    };
-
-    overlay.appendChild(videoEl);
-    overlay.appendChild(closeBtn);
-    scannerModal.appendChild(overlay);
-    document.body.appendChild(scannerModal);
+  function stop(){
+    running = false;
+    if (videoStream) {
+      videoStream.getTracks().forEach(t => t.stop());
+      videoStream = null;
+    }
+    if (videoEl) {
+      videoEl.pause();
+      videoEl.srcObject = null;
+    }
+    if (mount) {
+      mount.innerHTML = '';
+      mount.remove();
+      mount = null;
+    }
+    videoEl = null;
   }
 
-  return { open, close };
+  return { open, stop };
 })();
 </script>
-
-<style>
-/* Modal styling for scanner preview */
-.scanner-modal {
-  position: fixed;
-  top: 0; left: 0;
-  width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-}
-.scanner-modal .overlay {
-  position: relative;
-  text-align: center;
-}
-.scanner-modal video.preview {
-  width: 90vw;
-  max-width: 480px;
-  border-radius: 1rem;
-  box-shadow: 0 0 10px rgba(255,255,255,0.2);
-}
-.scanner-modal button.btn {
-  margin-top: 1rem;
-}
-</style>
