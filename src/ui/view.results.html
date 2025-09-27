@@ -1,51 +1,53 @@
 <section id="screenResults" class="screen">
   <div class="card">
-    <h2 class="h">Review &amp; Expiration</h2>
-    <p class="subtitle">Review the info below and enter the expiration date for the label.</p>
+    <h2>Review &amp; Expiration</h2>
+    <p class="subtitle">
+      Review the product info and enter an expiration date for the label.
+    </p>
 
-    <!-- Status + spinner -->
-    <div class="msg" id="resultsStatus" role="status" aria-live="polite"></div>
+    <!-- Live status -->
+    <div id="resultsStatus" class="msg" role="status" aria-live="polite"></div>
     <div id="resultsLoad" class="spinner" hidden></div>
 
-    <!-- Expiration first (enables Save when valid) -->
+    <!-- Expiration first -->
     <div class="field">
       <label for="resExp">Expiration (mm/dd/yyyy)</label>
-      <input id="resExp" placeholder="mm/dd/yyyy" />
-      <div class="hint">Choose the 1st of the month if the exact day isn’t listed.</div>
+      <input id="resExp" type="text" inputmode="numeric" placeholder="mm/dd/yyyy" autocomplete="off" />
+      <div class="hint">Use the 1st of the month if the exact date is unknown.</div>
     </div>
 
-    <!-- Editable fields -->
+    <!-- Product fields -->
     <div class="row">
       <div class="field">
         <label for="resSpecies">Species</label>
         <select id="resSpecies">
-          <option>Dog</option>
-          <option>Cat</option>
+          <option value="Dog">Dog</option>
+          <option value="Cat">Cat</option>
         </select>
       </div>
 
       <div class="field">
         <label for="resStage">Lifestage</label>
         <select id="resStage">
-          <option>Juvenile</option>
-          <option selected>Adult</option>
-          <option>Senior</option>
+          <option value="Juvenile">Juvenile</option>
+          <option value="Adult" selected>Adult</option>
+          <option value="Senior">Senior</option>
         </select>
       </div>
 
       <div class="field">
         <label for="resBrand">Brand</label>
-        <input id="resBrand" />
+        <input id="resBrand" type="text" />
       </div>
 
       <div class="field">
         <label for="resName">Product Name</label>
-        <input id="resName" />
+        <input id="resName" type="text" />
       </div>
 
       <div class="field">
-        <label for="resFlavor">Recipe/Flavor</label>
-        <input id="resFlavor" />
+        <label for="resFlavor">Recipe / Flavor</label>
+        <input id="resFlavor" type="text" />
       </div>
 
       <div class="field">
@@ -54,10 +56,14 @@
       </div>
     </div>
 
-    <!-- Actions -->
+    <!-- Action buttons -->
     <div class="actions">
-      <button id="resultsSave" class="btn" disabled>Save and Create Label</button>
-      <button class="btn startover startOver" type="button">Start Over</button>
+      <button id="resultsSave" class="btn" type="button" disabled>
+        Save and Create Label
+      </button>
+      <button class="btn startover startOver" type="button">
+        Start Over
+      </button>
     </div>
   </div>
 </section>

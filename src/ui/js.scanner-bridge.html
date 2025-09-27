@@ -1,106 +1,137 @@
 <script>
 /**
- * Scanner Bridge (Render mini-app, inline modal)
- * ----------------------------------------------
- * Opens: https://scannerminiapp.onrender.com/scanner.html?license=...
- * Receives: postMessage({ type:"scandit:upc", upc }) | { type:"scandit:cancel" }
- *
- * Public API:
- *   window.MiniScanner.open()       // show modal
- *   window.MiniScanner.close()      // hide modal (if needed)
- *   window.MiniScanner.origin/url   // readonly debug
- *
- * Global events your app can listen for:
- *   window.addEventListener('upc-scanned', e => e.detail.upc)
- *   window.addEventListener('upc-scan-canceled', () => ...)
+ * MiniScanner (Chrome BarcodeDetector version)
+ * - Modal with live video preview
+ * - Emits `upc-scanned` or `upc-scan-canceled`
  */
 
-(function () {
-  // ----- CONFIG -----
-  const SCANNER_ORIGIN = "https://scannerminiapp.onrender.com";
-  const SCANNER_URL    = SCANNER_ORIGIN + "/scanner.html";
-  const SCANDIT_LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
+window.MiniScanner = (function(){
+  let stream = null;
+  let scannerModal = null;
+  let videoEl = null;
+  let overlay = null;
+  let detector = null;
+  let scanning = false;
 
-  // ----- INTERNALS -----
-  const MODAL_ID = 'scannerModal';
-  const CLOSE_ID = 'scannerCloseBtn';
+  async function open(){
+    if (!('BarcodeDetector' in window)) {
+      alert('BarcodeDetector not supported on this device.');
+      return;
+    }
 
-  function buildScannerUrl() {
-    const sep = SCANNER_URL.includes("?") ? "&" : "?";
-    return `${SCANNER_URL}${sep}license=${encodeURIComponent(SCANDIT_LICENSE)}`;
+    close(); // Cleanup any previous instances
+    buildUI();
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      videoEl.srcObject = stream;
+      videoEl.play();
+      scanning = true;
+      detectLoop();
+    } catch (err) {
+      console.error('Camera error:', err);
+      emitCanceled();
+    }
   }
 
-  function dispatchResult(upc) {
-    window.dispatchEvent(new CustomEvent("upc-scanned", { detail: { upc } }));
+  function close(){
+    scanning = false;
+    if (detector) detector = null;
+    if (videoEl) videoEl.pause();
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
+    }
+    if (scannerModal) scannerModal.remove();
+    scannerModal = null;
   }
-  function dispatchCancel() {
-    window.dispatchEvent(new CustomEvent("upc-scan-canceled"));
+
+  async function detectLoop(){
+    if (!scanning) return;
+    try {
+      if (!detector) detector = new BarcodeDetector({ formats: ['upc_a', 'ean_13'] });
+      const results = await detector.detect(videoEl);
+      if (results.length > 0) {
+        const raw = results[0].rawValue || '';
+        const upc = normalize(raw);
+        if (upc) {
+          emitScanned(upc);
+          return close();
+        }
+      }
+    } catch (err) {
+      console.warn('Scan error:', err);
+    }
+    requestAnimationFrame(detectLoop);
   }
 
-  // ----- MODAL -----
-  function open() {
-    // Make sure we don’t duplicate the modal
-    close();
+  function normalize(val){
+    const s = String(val || '').replace(/\D/g, '');
+    if (s.length === 13 && s[0] === '0') return s.slice(1); // EAN-13 → UPC-A
+    if (s.length === 12) return s;
+    return '';
+  }
 
-    const url = buildScannerUrl();
-    const wrap = document.createElement('div');
-    wrap.id = MODAL_ID;
-    wrap.setAttribute('role', 'dialog');
-    wrap.setAttribute('aria-modal', 'true');
-    wrap.style.cssText = [
-      'position:fixed','inset:0','background:rgba(0,0,0,.6)',
-      'display:grid','place-items:center','z-index:9999'
-    ].join(';');
+  function emitScanned(upc){
+    window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc } }));
+  }
 
-    wrap.innerHTML = `
-      <div style="width:min(96vw,520px);height:80vh;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.25);display:flex;flex-direction:column;">
-        <div style="display:flex;justify-content:flex-end;gap:8px;align-items:center;padding:8px;background:#f8fafc;border-bottom:1px solid #e5e7eb;">
-          <button id="${CLOSE_ID}" type="button" class="btn ghost" style="margin-right:8px">Close</button>
-        </div>
-        <iframe
-          src="${url}"
-          style="flex:1;width:100%;border:0"
-          allow="camera *; microphone *"
-          title="Barcode Scanner"
-        ></iframe>
-      </div>
-    `;
+  function emitCanceled(){
+    window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
+  }
 
-    document.body.appendChild(wrap);
-    document.getElementById(CLOSE_ID).onclick = () => {
-      dispatchCancel();
+  function buildUI(){
+    scannerModal = document.createElement('div');
+    scannerModal.className = 'scanner-modal';
+
+    overlay = document.createElement('div');
+    overlay.className = 'overlay';
+
+    videoEl = document.createElement('video');
+    videoEl.setAttribute('autoplay', '');
+    videoEl.setAttribute('playsinline', '');
+    videoEl.className = 'preview';
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn secondary';
+    closeBtn.textContent = 'Cancel';
+    closeBtn.onclick = () => {
+      emitCanceled();
       close();
     };
+
+    overlay.appendChild(videoEl);
+    overlay.appendChild(closeBtn);
+    scannerModal.appendChild(overlay);
+    document.body.appendChild(scannerModal);
   }
 
-  function close() {
-    const el = document.getElementById(MODAL_ID);
-    if (el) el.remove();
-  }
-
-  // ----- SECURE MESSAGE HANDLER -----
-  window.addEventListener("message", (ev) => {
-    if (ev.origin !== SCANNER_ORIGIN) return; // security
-    const data = ev.data || {};
-
-    if (data.type === "scandit:upc" && /^\d{12}$/.test(String(data.upc))) {
-      close();
-      dispatchResult(String(data.upc));
-      return;
-    }
-    if (data.type === "scandit:cancel") {
-      close();
-      dispatchCancel();
-      return;
-    }
-  });
-
-  // ----- PUBLIC API -----
-  window.MiniScanner = Object.freeze({
-    open,
-    close,
-    get origin(){ return SCANNER_ORIGIN; },
-    get url(){ return SCANNER_URL; }
-  });
+  return { open, close };
 })();
 </script>
+
+<style>
+/* Modal styling for scanner preview */
+.scanner-modal {
+  position: fixed;
+  top: 0; left: 0;
+  width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.scanner-modal .overlay {
+  position: relative;
+  text-align: center;
+}
+.scanner-modal video.preview {
+  width: 90vw;
+  max-width: 480px;
+  border-radius: 1rem;
+  box-shadow: 0 0 10px rgba(255,255,255,0.2);
+}
+.scanner-modal button.btn {
+  margin-top: 1rem;
+}
+</style>

@@ -6,9 +6,47 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
   <title>Food Label Creator</title>
 
-  <!-- Kiosk styles -->
+  <!-- Shared Kiosk Styles -->
   <?!= include('ui/css.kiosk'); ?>
+
+  <style>
+    /* Inline additions for spinner, toast, and disabled buttons */
+    .spinner {
+      display: inline-block;
+      width: 24px;
+      height: 24px;
+      border: 4px solid #ccc;
+      border-top: 4px solid #0ea5e9;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 1em auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .msg.success {
+      background-color: #dcfce7;
+      color: #166534;
+    }
+
+    .msg.error {
+      background-color: #fee2e2;
+      color: #991b1b;
+    }
+
+    button:disabled,
+    .btn:disabled {
+      background-color: #ccc !important;
+      cursor: not-allowed;
+      pointer-events: none;
+      opacity: 0.6;
+    }
+  </style>
 </head>
+
 <body>
   <main class="app">
     <header>
@@ -19,17 +57,17 @@
       </p>
     </header>
 
-    <!-- Screen host + live region -->
+    <!-- Main screen and message region -->
     <div id="screen"></div>
     <div id="toast" class="msg" role="status" aria-live="polite"></div>
   </main>
 
   <!-- App scripts (order matters) -->
   <?!= include('ui/js.api'); ?>
-  <?!= include('ui/js.scanner-bridge'); ?>  <!-- NEW: popup + postMessage bridge -->
+  <?!= include('ui/js.scanner-bridge'); ?> <!-- Handles postMessage popup return -->
   <?!= include('ui/js.app'); ?>
 
-  <!-- Views -->
+  <!-- UI Views -->
   <?!= include('ui/view.launch'); ?>
   <?!= include('ui/view.results'); ?>
   <?!= include('ui/view.new'); ?>

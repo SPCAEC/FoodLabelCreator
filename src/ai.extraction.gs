@@ -1,12 +1,7 @@
-/** OpenAI Vision/Text extraction.
- * Expects { upc, frontDataUrl?, ingDataUrl?, partial? } and returns
- * { brand, productName, flavor, species, lifestage, ingredients, needMoreFront?, needMoreIng? }
- */
 function aiExtract_(req){
   if (!CFG.ENABLE_AI) throw new Error('AI disabled');
   if (!CFG.OPENAI_API_KEY) throw new Error('Missing OPENAI_API_KEY script property');
 
-  // Build messages for gpt-5-mini; send images as base64 data URLs
   const instructions = [
     "You are extracting product label metadata for pet food/treat packages.",
     "Return strict JSON with keys: brand, productName, flavor, species (Dog|Cat), lifestage (Juvenile|Adult|Senior), ingredients (comma-separated string).",
@@ -35,37 +30,32 @@ function aiExtract_(req){
   const res = UrlFetchApp.fetch(`${CFG.OPENAI_BASE_URL}/chat/completions`, {
     method: 'post',
     muteHttpExceptions: true,
-    headers: { Authorization: `Bearer ${CFG.OPENAI_API_KEY}`, 'Content-Type':'application/json' },
+    headers: {
+      Authorization: `Bearer ${CFG.OPENAI_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
     payload: JSON.stringify(payload)
   });
-  if (res.getResponseCode() >= 300) throw new Error(`OpenAI error: ${res.getResponseCode()} ${res.getContentText()}`);
+
+  if (res.getResponseCode() >= 300)
+    throw new Error(`OpenAI error: ${res.getResponseCode()} ${res.getContentText()}`);
 
   const txt = JSON.parse(res.getContentText());
-  const json = JSON.parse(txt.choices?.[0]?.message?.content || '{}');
+  const msgContent = txt.choices?.[0]?.message?.content;
 
-  // Normalize outputs & basic completeness checks
+  if (!msgContent)
+    console.warn('[aiExtract_] No GPT content returned:', txt);
+
+  const json = JSON.parse(msgContent || '{}');
+
   const out = {
-    brand: (json.brand||'').trim(),
-    productName: (json.productName||'').trim(),
-    flavor: (json.flavor||'').trim(),
+    brand: (json.brand || '').trim(),
+    productName: (json.productName || '').trim(),
+    flavor: (json.flavor || '').trim(),
     species: normSpecies_(json.species),
     lifestage: normLifestage_(json.lifestage),
-    ingredients: (json.ingredients||'').replace(/\s*,\s*/g, ', ').trim()
+    ingredients: (json.ingredients || '').replace(/\s*,\s*/g, ', ').trim()
   };
 
   return out;
-}
-
-function normSpecies_(s){
-  const t = String(s||'').toLowerCase();
-  if (t.includes('dog')) return 'Dog';
-  if (t.includes('cat')) return 'Cat';
-  return ''; // unknown
-}
-function normLifestage_(s){
-  const t = String(s||'').toLowerCase();
-  if (t.includes('senior')) return 'Senior';
-  if (t.includes('juvenile') || t.includes('puppy') || t.includes('kitten')) return 'Juvenile';
-  if (t.includes('adult')) return 'Adult';
-  return 'Adult'; // default
 }

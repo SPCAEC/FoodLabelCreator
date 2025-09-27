@@ -2,21 +2,24 @@
 <section id="screenLaunch" class="screen active">
   <div class="card">
     <h2>Search by Barcode</h2>
+
+    <!-- UPC Input -->
     <div class="row">
       <div class="field">
         <label for="upcInput">UPC</label>
         <input id="upcInput" inputmode="numeric" pattern="[0-9]*" maxlength="14" placeholder="e.g. 012345678905" autocomplete="off">
-        <div class="hint">Numbers only — we’ll ignore spaces/dashes.</div>
+        <div class="hint">12-digit barcode (UPC-A). We'll ignore dashes/spaces.</div>
       </div>
     </div>
 
+    <!-- Actions -->
     <div class="row actions">
       <button id="scanBtn" class="btn" type="button">Scan Barcode</button>
-      <button id="lookupBtn" class="btn secondary" type="button">Lookup</button>
+      <button id="lookupBtn" class="btn secondary" type="button" disabled>Lookup</button>
       <button id="clearBtn" class="btn secondary" type="button">Clear</button>
     </div>
 
-    <!-- Live scanner mount (hidden until scanning starts) -->
+    <!-- Scanner (BarcodeDetector or bridge) -->
     <div id="scannerSection" class="camera hidden" aria-hidden="true">
       <div id="scannerMount" class="preview"></div>
       <div class="actions">
@@ -24,16 +27,17 @@
       </div>
     </div>
 
-    <div class="msg info" id="launchInfo" role="status" aria-live="polite" hidden></div>
-    <div class="msg error" id="launchError" role="alert" hidden></div>
+    <!-- Status messages -->
+    <div id="launchInfo" class="msg" role="status" aria-live="polite"></div>
     <div id="launchLoad" class="spinner" hidden></div>
   </div>
 
   <div class="card">
-    <h3 class="h">Tips</h3>
+    <h3>Tips</h3>
     <ul class="t">
-      <li>If scanning struggles, type the UPC and tap <em>Lookup</em>.</li>
-      <li>We’ll auto-detect common EAN-13/UPC-A formats.</li>
+      <li>You can scan or manually enter a 12-digit UPC.</li>
+      <li>If using a keyboard-style scanner, just scan — no need to tap anything.</li>
+      <li>If your UPC is 13 digits and starts with 0, we’ll normalize it.</li>
     </ul>
   </div>
 </section>

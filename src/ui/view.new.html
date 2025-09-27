@@ -1,32 +1,36 @@
 <section id="screenNew" class="screen">
-  <div class="app">
-    <h1>New Product Found</h1>
-    <p class="subtitle">Looks like this is a new product! We’ll need two photos to create a new listing. First, take a clear photo of the full front of the bag/box/can.</p>
+  <div class="card">
+    <h2>New Product</h2>
+    <p class="subtitle">
+      Looks like this is a new product! We’ll need two clear photos to create a label:
+    </p>
 
-    <div class="row card">
-      <div class="field">
-        <input id="frontInput" type="file" accept="image/*" capture="environment" hidden />
-        <button id="frontBtn" class="btn">Take Front Photo</button>
-        <img id="frontPreview" class="hidden" alt="Front Preview" style="margin-top:1rem; border-radius:12px; max-width:100%;" />
-      </div>
-
-      <div id="ingredientsBlock" class="field hidden" style="margin-top:1rem;">
-        <label>Now the ingredients label (good lighting, flat, in focus):</label>
-        <input id="ingInput" type="file" accept="image/*" capture="environment" hidden />
-        <button id="ingBtn" class="btn secondary">Take Ingredients Photo</button>
-        <img id="ingPreview" class="hidden" alt="Ingredients Preview" style="margin-top:1rem; border-radius:12px; max-width:100%;" />
-      </div>
-
-      <div class="actions">
-        <button id="nextToIngredients" class="btn hidden">Continue</button>
-      </div>
-
-      <div class="actions">
-        <button class="btn startover startOver">Start Over</button>
-      </div>
-
-      <div class="msg" id="newStatus" role="status"></div>
-      <div id="newLoad" class="spinner" hidden></div>
+    <!-- Front photo -->
+    <div class="field">
+      <label for="frontInput">Step 1: Full front of the bag/box/can</label>
+      <input id="frontInput" type="file" accept="image/*" capture="environment" hidden />
+      <button id="frontBtn" class="btn" type="button">Take Front Photo</button>
+      <img id="frontPreview" class="hidden" alt="Front Preview"
+           style="margin-top:1rem; border-radius:12px; max-width:100%;" />
     </div>
+
+    <!-- Ingredients photo -->
+    <div id="ingredientsBlock" class="field hidden" style="margin-top:1.5rem;">
+      <label for="ingInput">Step 2: Ingredients label (flat, good lighting)</label>
+      <input id="ingInput" type="file" accept="image/*" capture="environment" hidden />
+      <button id="ingBtn" class="btn secondary" type="button">Take Ingredients Photo</button>
+      <img id="ingPreview" class="hidden" alt="Ingredients Preview"
+           style="margin-top:1rem; border-radius:12px; max-width:100%;" />
+    </div>
+
+    <!-- Actions -->
+    <div class="actions">
+      <button id="nextToIngredients" class="btn hidden" type="button">Continue</button>
+      <button class="btn startover startOver" type="button">Start Over</button>
+    </div>
+
+    <!-- Status + spinner -->
+    <div id="newStatus" class="msg" role="status" aria-live="polite"></div>
+    <div id="newLoad" class="spinner" hidden></div>
   </div>
 </section>
