@@ -215,14 +215,17 @@
           ingDataUrl: state.photos.ingredients
         });
 
-        if (!extracted || !extracted.ok || !extracted.data) {
+        console.log('[EXTRACT RESULT]', extracted);
+
+        if (!extracted || !extracted.ok) {
           throw new Error('AI extract failed');
         }
 
-        console.log('[EXTRACT RESULT]', extracted);
-
-        // ✅ Fix: copy AI fields into the item state
-        Object.assign(state.item, extracted.data);
+        if (extracted.data && typeof extracted.data === 'object') {
+          Object.assign(state.item, extracted.data);
+        } else {
+          console.warn('[EXTRACT WARNING] No usable data returned from AI.');
+        }
 
         navigate('screenReview');
         renderReview();
