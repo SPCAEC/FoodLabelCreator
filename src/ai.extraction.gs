@@ -10,9 +10,20 @@ function aiExtract_(req) {
     "Use concise brand and productName; flavor is a short descriptor like 'Chicken & Rice'."
   ].join(' ');
 
+  // 🔑 Correctly build image blocks
   const images = [];
-  if (req.frontDataUrl) images.push({ type: 'input_image', image_url: req.frontDataUrl });
-  if (req.ingDataUrl) images.push({ type: 'input_image', image_url: req.ingDataUrl });
+  if (req.frontDataUrl) {
+    images.push({
+      type: 'image_url',
+      image_url: { url: req.frontDataUrl }
+    });
+  }
+  if (req.ingDataUrl) {
+    images.push({
+      type: 'image_url',
+      image_url: { url: req.ingDataUrl }
+    });
+  }
 
   const useResponseFormat = CFG.OPENAI_MODEL === 'gpt-4o';
 
@@ -21,6 +32,7 @@ function aiExtract_(req) {
     messages: [{
       role: 'user',
       content: [
+        // text first, then all images
         { type: 'text', text: instructions },
         ...images
       ]
@@ -33,7 +45,7 @@ function aiExtract_(req) {
   }
 
   console.log('[GPT Payload]', JSON.stringify(payload, null, 2));
-  
+
   const res = UrlFetchApp.fetch(`${CFG.OPENAI_BASE_URL}/chat/completions`, {
     method: 'post',
     muteHttpExceptions: true,
