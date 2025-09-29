@@ -7,7 +7,7 @@ function aiExtract_(req) {
   const instructions = [
     "You are extracting product label metadata for pet food/treat packages.",
     "Return strict JSON with keys: brand, productName, flavor, species (Dog|Cat), lifestage (Juvenile|Adult|Senior), ingredients (comma-separated string).",
-    "If the image is unclear for any field, set that field to an empty string.",
+    "If the image is unclear for any field, set that field to an empty string. Do not guess or make assumptions",
     "Infer species by imagery/text (dog/cat). Infer lifestage; default Adult unless text like Senior, Puppy, Kitten. Map Puppy/Kitten -> Juvenile.",
     "Use concise brand and productName; flavor is a short descriptor like 'Chicken & Rice'."
   ].join(' ');
@@ -19,7 +19,14 @@ function aiExtract_(req) {
   if (req.ingDataUrl) {
     images.push({ type: 'image_url', image_url: { url: req.ingDataUrl } });
   }
-
+  
+  console.log('[Image Data Lengths]', {
+    front: front?.length,
+    ingredients: ingredients?.length
+  });
+  console.log('[Front Preview]', front?.slice(0, 100));
+  console.log('[Ingredients Preview]', ingredients?.slice(0, 100));
+  
   const payload = {
     model: CFG.OPENAI_MODEL,
     messages: [{
