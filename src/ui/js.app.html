@@ -181,7 +181,7 @@
 
   function wireNewItem() {
     state.photos = state.photos || {};
-    
+
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
     const ingBtn = $('#ingredientsBtn');
@@ -199,7 +199,7 @@
     function checkNextReady() {
       const hasFront = !!state.photos.front;
       const hasIng = !!state.photos.ingredients;
-      console.log('[checkNextReady] Front:', hasFront, 'Ingredients:', hasIng);
+      console.log('[checkNextReady]', { hasFront, hasIng, state });
       if (hasFront && hasIng) {
         actions?.classList.remove('hidden'); // ✅ Show Continue button block
       }
@@ -237,6 +237,14 @@
 
           stopStream(stream);
           overlay.remove();
+
+          if (!dataUrl || !dataUrl.startsWith('data:image/jpeg')) {
+            console.error('[Camera Capture] Invalid or empty data URL:', dataUrl);
+            setMsg(msg, 'Failed to capture image. Please try again.', 'error');
+            return;
+          }
+
+          console.log('[Camera Capture] Got image:', dataUrl.substring(0, 50));
           if (onCapture) onCapture(dataUrl);
         };
 
@@ -253,7 +261,7 @@
     frontBtn?.addEventListener('click', () => {
       launchCamera({
         onCapture: dataUrl => {
-          console.log('[front photo taken]');
+          console.log('[front photo taken]', dataUrl.substring(0, 50));
           state.photos.front = dataUrl;
           frontPreview.src = dataUrl;
           frontPreview.classList.remove('hidden');
@@ -276,7 +284,7 @@
       launchCamera({
         focus: true,
         onCapture: dataUrl => {
-          console.log('[ingredients photo taken]');
+          console.log('[ingredients photo taken]', dataUrl.substring(0, 50));
           state.photos.ingredients = dataUrl;
           ingPreview.src = dataUrl;
           ingPreview.classList.remove('hidden');
@@ -302,17 +310,18 @@
       });
 
       if (!state.photos.front || !state.photos.ingredients) {
-        console.warn('[nextBtn] Missing one or both photos');
+        console.warn('[nextBtn] Missing one or both photos', state.photos);
+        setMsg(msg, 'Missing one or both images. Please retake.', 'error');
         return;
       }
 
+      console.log('[DEBUG] Photos before extract', {
+        frontStart: state.photos.front?.substring(0, 50),
+        ingStart: state.photos.ingredients?.substring(0, 50)
+      });
+
       setMsg(msg, 'Extracting label data…', 'success');
       spinner(true, spinnerEl);
-      
-      console.log('[DEBUG] Photos before extract', {
-        front: state.photos.front?.substring(0, 30),
-        ingredients: state.photos.ingredients?.substring(0, 30)
-      });
 
       try {
         const extracted = await API.extract({
