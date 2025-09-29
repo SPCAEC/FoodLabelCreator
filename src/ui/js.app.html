@@ -260,6 +260,34 @@
         nextBtn?.classList.remove('hidden');
       }
     }
+
+    nextBtn?.addEventListener('click', async () => {
+    if (!state.photos.front || !state.photos.ingredients) return;
+
+    setMsg(msg, 'Extracting label data…', 'success');
+    spinner(true, spinnerEl);
+
+    try {
+      const extracted = await API.extract({
+        upc: state.upc,
+        frontDataUrl: state.photos.front,
+        ingDataUrl: state.photos.ingredients
+      });
+
+      state.item = normalizeItemFromSheet({
+        upc: state.upc,
+        ...extracted
+      });
+
+      navigate('screenReview');
+      setTimeout(renderReview, 0);
+    } catch (err) {
+      console.error('[extract error]', err);
+      setMsg(msg, 'AI extraction failed. Please try again.', 'error');
+    } finally {
+      spinner(false, spinnerEl);
+    }
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
