@@ -1,35 +1,31 @@
 <section id="screenNew" class="screen">
-  <div class="card">
-    <h2>New Product</h2>
-    <p class="subtitle">
-      Looks like this is a new product! We’ll need two clear photos to create a label:
-    </p>
+  <div class="app">
+    <h1>New Product</h1>
+    <p>Looks like this is a new product! We'll need two clear photos to create a label:</p>
 
-    <!-- Front photo -->
-    <div class="field">
-      <label for="frontInput">Step 1: Full front of the bag/box/can</label>
-      <input id="frontInput" type="file" accept="image/*" capture="environment" hidden />
-      <button id="frontBtn" class="btn" type="button">Take Front Photo</button>
-      <img id="frontPreview" class="hidden" alt="Front Preview"
-           style="margin-top:1rem; border-radius:12px; max-width:100%;" />
+    <div class="row">
+      <!-- Front photo block -->
+      <div class="card">
+        <p><strong>Step 1:</strong> Full front of the bag/box/can</p>
+        <img id="frontPreview" class="preview hidden" />
+        <button id="frontBtn" class="btn">Take Front Photo</button>
+      </div>
+
+      <!-- Ingredients photo block -->
+      <div class="card" id="ingredientsBlock" class="hidden">
+        <p><strong>Step 2:</strong> Ingredients label (flat, good lighting)</p>
+        <img id="ingPreview" class="preview hidden" />
+        <button id="ingBtn" class="btn secondary">Take Ingredients Photo</button>
+      </div>
     </div>
 
-    <!-- Ingredients photo -->
-    <div id="ingredientsBlock" class="field hidden" style="margin-top:1.5rem;">
-      <label for="ingInput">Step 2: Ingredients label (flat, good lighting)</label>
-      <input id="ingInput" type="file" accept="image/*" capture="environment" hidden />
-      <button id="ingBtn" class="btn secondary" type="button">Take Ingredients Photo</button>
-      <img id="ingPreview" class="hidden" alt="Ingredients Preview"
-           style="margin-top:1rem; border-radius:12px; max-width:100%;" />
-    </div>
-
-    <!-- Actions -->
+    <!-- Continue -->
     <div class="actions">
-      <button id="nextToIngredients" class="btn hidden" type="button">Continue</button>
-      <button class="btn startover startOver" type="button">Start Over</button>
+      <button id="nextToIngredients" class="btn hidden">Continue</button>
+      <button class="btn secondary startover startOver">Start Over</button>
     </div>
 
-    <!-- Status + spinner -->
+    <!-- Status -->
     <div id="newStatus" class="msg" role="status" aria-live="polite"></div>
     <div id="newLoad" class="spinner" hidden></div>
   </div>

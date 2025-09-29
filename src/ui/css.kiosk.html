@@ -158,4 +158,24 @@ video{ width:100%; max-height:60vh; border-radius:16px }
 .screen { display: none; }
 .screen.active { display: block; }
 .hidden { display: none !important; }
+
+/* --- New: Side-by-side photo layout --- */
+.photo-row {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr 1fr;
+  align-items: start;
+}
+@media (max-width: 680px) {
+  .photo-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- Optional: smaller centered buttons under previews --- */
+.camera-btn {
+  width: auto;
+  min-width: 200px;
+  margin: 0.75rem auto 0 auto;
+}
 </style>

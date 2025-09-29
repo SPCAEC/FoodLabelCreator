@@ -165,7 +165,20 @@
       ingredients: String(item.ingredients || '').trim()
     };
   }
-  
+
+  function renderReview() {
+    const item = state.item || {};
+    $('#revExp').value = state.exp || '';
+
+    $('#revSpecies').value = item.species || 'Dog';
+    $('#revStage').value = item.lifestage || 'Adult';
+    $('#revBrand').value = item.brand || '';
+    $('#revName').value = item.productName || '';
+    $('#revFlavor').value = item.flavor || '';
+    $('#revIngredients').value = item.ingredients || '';
+    $('#revTreatFood').value = item.type || '';
+    }
+
   function wireNewItem() {
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
