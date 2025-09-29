@@ -1,4 +1,3 @@
-<script>
 /**
  * App controller (rewritten cleanly)
  * - Launches scanner, looks up UPC
@@ -117,7 +116,7 @@
       } else {
         state.item = null;
         navigate('screenNew');
-        setTimeout(() => navigate('screenNew'), 0);
+        setTimeout(renderNewItem, 0);
       }
       setMsg(statusEl, '');
     } catch(err){
@@ -156,15 +155,8 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
-  // Wire stop button
-  const stopScanBtn = document.getElementById('stopScanBtn');
-  stopScanBtn?.addEventListener('click', () => {
-    MiniScanner.close();
-  });
-
-  wireGlobal();
-  wireLaunch();
-  navigate('screenLaunch');
+    wireGlobal();
+    wireLaunch();
+    navigate('screenLaunch');
   });
 })();
-</script>
