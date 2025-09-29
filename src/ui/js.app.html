@@ -208,11 +208,7 @@
       spinner(true, spin);
 
       try {
-        const extracted = await API.extract({
-          upc: state.upc, // optional
-          front: state.photos.front,
-          ingredients: state.photos.ingredients
-        });
+        const extracted = await API.extract(state.photos.front, state.photos.ingredients);
 
         console.log('[EXTRACT RESULT]', extracted);
 
