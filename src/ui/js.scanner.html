@@ -1,0 +1,45 @@
+<script>
+/**
+ * Scanner Bridge (Render mini-app)
+ * - Opens popup to hosted scanner page
+ * - Passes SCANDIT license as query param
+ * - Listens for postMessage and re-emits a CustomEvent('upc-scanned')
+ */
+
+(function(){
+  // 🔧 Configure your Render origin + scanner URL
+  const SCANNER_ORIGIN = "https://scannerminiapp.onrender.com";
+  const SCANNER_URL    = SCANNER_ORIGIN + "/scanner.html";
+
+  // License from Script Properties
+  const SCANDIT_LICENSE = `<?= PropertiesService.getScriptProperties().getProperty('SCANDIT_LICENSE') || '' ?>`;
+
+  function openScannerPopup() {
+    const w = 520, h = 760;
+    const left = Math.max(0, (screen.width - w) / 2);
+    const top  = Math.max(0, (screen.height - h) / 2);
+    const url  = `${SCANNER_URL}?license=${encodeURIComponent(SCANDIT_LICENSE)}`;
+
+    window.open(
+      url,
+      "scanUPC",
+      `width=${w},height=${h},left=${left},top=${top},resizable=yes`
+    );
+  }
+
+  // Secure message listener
+  window.addEventListener("message", (ev) => {
+    if (ev.origin !== SCANNER_ORIGIN) return; // security: only accept from your Render app
+    const data = ev.data || {};
+    if (data.type === "scandit:upc" && /^\d{12}$/.test(String(data.upc))) {
+      // Dispatch a CustomEvent so js.app can react without knowing about postMessage
+      window.dispatchEvent(new CustomEvent("upc-scanned", { detail: { upc: data.upc } }));
+    } else if (data.type === "scandit:cancel") {
+      window.dispatchEvent(new CustomEvent("upc-scan-canceled"));
+    }
+  });
+
+  // Expose a tiny API for your button handler
+  window.MiniScanner = { open: openScannerPopup };
+})();
+</script>

@@ -1,4 +1,4 @@
-function aiExtract_(req){
+function aiExtract_(req) {
   if (!CFG.ENABLE_AI) throw new Error('AI disabled');
   if (!CFG.OPENAI_API_KEY) throw new Error('Missing OPENAI_API_KEY script property');
 
@@ -11,21 +11,28 @@ function aiExtract_(req){
   ].join(' ');
 
   const images = [];
-  if (req.frontDataUrl) images.push({type:'input_image', image_url: req.frontDataUrl});
-  if (req.ingDataUrl)   images.push({type:'input_image', image_url: req.ingDataUrl});
+  if (req.frontDataUrl) images.push({ type: 'input_image', image_url: req.frontDataUrl });
+  if (req.ingDataUrl) images.push({ type: 'input_image', image_url: req.ingDataUrl });
+
+  const useResponseFormat = CFG.OPENAI_MODEL === 'gpt-4o';
 
   const payload = {
     model: CFG.OPENAI_MODEL,
     messages: [{
       role: 'user',
       content: [
-        {type:'text', text: instructions},
+        { type: 'text', text: instructions },
         ...images
       ]
     }],
-    temperature: 0.2,
-    response_format: { type: "json_object" }
+    temperature: 0.2
   };
+
+  if (useResponseFormat) {
+    payload.response_format = { type: 'json_object' };
+  }
+
+  console.log('[GPT Payload]', JSON.stringify(payload, null, 2));
 
   const res = UrlFetchApp.fetch(`${CFG.OPENAI_BASE_URL}/chat/completions`, {
     method: 'post',
@@ -37,17 +44,33 @@ function aiExtract_(req){
     payload: JSON.stringify(payload)
   });
 
-  if (res.getResponseCode() >= 300)
-    throw new Error(`OpenAI error: ${res.getResponseCode()} ${res.getContentText()}`);
+  const status = res.getResponseCode();
+  const body = res.getContentText();
+  console.log('[GPT Response]', body);
 
-  const txt = JSON.parse(res.getContentText());
-  const msgContent = txt.choices?.[0]?.message?.content;
+  if (status >= 300) {
+    throw new Error(`OpenAI error: ${status} ${body}`);
+  }
 
-  if (!msgContent)
-    console.warn('[aiExtract_] No GPT content returned:', txt);
+  const parsed = JSON.parse(body);
+  const msgContent = parsed.choices?.[0]?.message?.content;
 
-  const json = JSON.parse(msgContent || '{}');
+  if (!msgContent) {
+    console.warn('[aiExtract_] No GPT content returned:', parsed);
+    throw new Error('AI returned no message content');
+  }
 
+  let json = {};
+  try {
+    json = JSON.parse(msgContent);
+  } catch (e) {
+    console.warn('[aiExtract_] Failed to parse JSON from GPT response:', msgContent);
+    throw new Error('Failed to parse JSON response from AI');
+  }
+
+  console.log('[Parsed JSON]', JSON.stringify(json, null, 2));
+
+  // Normalize output keys
   const out = {
     brand: (json.brand || '').trim(),
     productName: (json.productName || '').trim(),
