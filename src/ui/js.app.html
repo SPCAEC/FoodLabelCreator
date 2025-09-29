@@ -252,6 +252,69 @@
     }
   }
 
+  function wireReviewScreen() {
+    const saveBtn = $('#revSave');
+    const expInput = $('#revExp');
+    const typeSelect = $('#revTreatFood');
+    const status = $('#revStatus');
+    const load = $('#revLoad');
+
+    function updateSaveBtn() {
+      const exp = expInput.value.trim();
+      const type = typeSelect.value;
+      const validDate = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(exp);
+      saveBtn.disabled = !(validDate && (type === 'Food' || type === 'Treat'));
+    }
+
+    expInput.addEventListener('input', updateSaveBtn);
+    typeSelect.addEventListener('change', updateSaveBtn);
+
+    saveBtn.addEventListener('click', async () => {
+      const exp = expInput.value.trim();
+      const type = typeSelect.value;
+      if (!exp || !type) return;
+
+      // Merge values into state
+      Object.assign(state.item, {
+        species: $('#revSpecies').value,
+        lifestage: $('#revStage').value,
+        brand: $('#revBrand').value.trim(),
+        productName: $('#revName').value.trim(),
+        flavor: $('#revFlavor').value.trim(),
+        ingredients: $('#revIngredients').value.trim(),
+        type
+      });
+
+      state.exp = exp;
+
+      setMsg(status, 'Generating label…');
+      spinner(true, load);
+
+      try {
+        const res = await API.createLabels({
+          upc: state.upc,
+          ...state.item,
+          expiration: exp
+        });
+
+        if (!res || !res.pdfUrl) {
+          throw new Error('Label generation failed');
+        }
+
+        state.pdf = { url: res.pdfUrl, id: res.fileId };
+        setMsg(status, 'Label created successfully!', 'success');
+        window.open(res.pdfUrl, '_blank');
+      } catch (err) {
+        console.error('[create label error]', err);
+        setMsg(status, 'Failed to create label.', 'error');
+      } finally {
+        spinner(false, load);
+      }
+    });
+
+    updateSaveBtn();
+  }
+
   function captureImage(callback){
     const overlay = document.createElement('div');
     overlay.className = 'camera-overlay';
@@ -294,6 +357,7 @@
     wireGlobal();
     wireLaunch();
     wireNewItem();
+    wireReviewScreen();
     navigate('screenLaunch');
   });
 })();
