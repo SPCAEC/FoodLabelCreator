@@ -33,7 +33,7 @@ function aiExtract_(req) {
   }
 
   console.log('[GPT Payload]', JSON.stringify(payload, null, 2));
-
+  
   const res = UrlFetchApp.fetch(`${CFG.OPENAI_BASE_URL}/chat/completions`, {
     method: 'post',
     muteHttpExceptions: true,
@@ -69,6 +69,10 @@ function aiExtract_(req) {
   }
 
   console.log('[Parsed JSON]', JSON.stringify(json, null, 2));
+  console.log('[Image Data Lengths]', {
+    front: req.frontDataUrl?.length,
+    ingredients: req.ingDataUrl?.length
+  });
 
   // Normalize output keys
   const out = {
