@@ -263,7 +263,12 @@
       });
     });
 
+    const ingBtn = document.getElementById('ingredientsBtn');
+    const ingPreview = document.getElementById('ingredientsPreview');
+
     ingBtn?.addEventListener('click', () => {
+      ingBtn.classList.add('hidden'); // 🔒 hide after used
+
       launchCamera({
         onCapture: dataUrl => {
           ingPreview.src = dataUrl;
@@ -331,9 +336,21 @@
     const ingredientsBlock = document.querySelector('#ingredientsBlock');
 
     frontBtn.addEventListener('click', async () => {
-      frontBtn.classList.add('hidden'); // 🔒 hide front button
-      ingredientsBlock?.classList.add('hidden'); // 🔒 hide Step 2
-      await startCamera('front'); // 📸 launch front camera
+      frontBtn.classList.add('hidden');        // 🔒 hide front button
+      ingredientsBlock?.classList.add('hidden'); // 🔒 ensure Step 2 still hidden
+
+      await startCamera('front', {
+        video: {
+          facingMode: 'environment',
+          focusMode: 'continuous' // 🔍 attempt to enable autofocus
+        }
+      });
+
+      // 👇 NEW: Scroll camera preview to top of screen
+      setTimeout(() => {
+        const previewEl = document.querySelector('.camera');
+        if (previewEl) previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300); // slight delay to ensure camera is drawn
     });
   });
 })();

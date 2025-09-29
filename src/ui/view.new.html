@@ -2,6 +2,11 @@
   <div id="photoSteps" class="card">
     <p>Looks like this is a new product! We'll need two clear photos to create a label:</p>
 
+    <!-- Start Over button in top right -->
+    <div style="position: absolute; top: 16px; right: 16px; z-index: 10;">
+      <button id="startoverBtn" class="btn startover">Start Over</button>
+    </div>
+
     <div class="photo-grid">
       <!-- Step 1: Front -->
       <div class="photo-block">
@@ -13,17 +18,14 @@
       <!-- Step 2: Ingredients (initially hidden) -->
       <div id="ingredientsBlock" class="photo-block hidden">
         <label><strong>Step 2:</strong> Ingredients label (flat, good lighting)</label>
-        <img id="ingPreview" class="preview hidden" alt="Ingredients photo preview">
-        <button id="ingBtn" class="btn secondary">Take Ingredients Photo</button>
+        <img id="ingredientsPreview" class="preview hidden" alt="Ingredients photo preview">
+        <button id="ingredientsBtn" class="btn">Take Ingredients Photo</button>
       </div>
     </div>
 
-    <div class="actions">
-      <button id="nextToIngredients" class="btn hidden">Continue</button>
-      <button id="startoverBtn" class="btn startover">Start Over</button>
+    <!-- Action Buttons (initially hidden until both photos taken) -->
+    <div id="photoActions" class="actions hidden">
+      <button id="photoContinue" class="btn">Continue</button>
     </div>
-
-    <div id="newStatus" class="msg" role="status" aria-live="polite"></div>
-    <div id="newLoad" class="spinner" hidden></div>
   </div>
 </section>
