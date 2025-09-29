@@ -333,7 +333,26 @@
     frontBtn.addEventListener('click', async () => {
       frontBtn.classList.add('hidden'); // 🔒 hide front button
       ingredientsBlock?.classList.add('hidden'); // 🔒 hide Step 2
-      await startCamera('front'); // 📸 launch front camera
+      launchCamera({
+        onCapture: dataUrl => {
+          // handle captured photo
+          frontPreview.src = dataUrl;
+          frontPreview.classList.remove('hidden');
+          state.photos.front = dataUrl;
+
+          setMsg(msg, 'Processing front photo…', 'success');
+          spinner(true, spinnerEl);
+
+          setTimeout(() => {
+            setMsg(msg, '');
+            spinner(false, spinnerEl);
+          }, 1000);
+
+          // now reveal step 2
+          ingredientsBlock?.classList.remove('hidden');
+          checkNextReady();
+        }
+      });
     });
   });
 })();
