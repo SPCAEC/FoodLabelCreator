@@ -6,7 +6,6 @@
  * - Auto-focuses ingredients photo
  * - Scrolls camera preview to top
  */
-console.log('[INIT] state is', state);
 (function(){
   const $ = sel => document.querySelector(sel);
   const $$ = sel => [...document.querySelectorAll(sel)];
@@ -19,6 +18,7 @@ console.log('[INIT] state is', state);
     pdf: { url: '', id: '' },
     needs: { ingredients: false }
   };
+  console.log('[INIT] state is', state);
 
   const isValidUPC = v => /^\d{12}$/.test(String(v || '').trim());
   const isValidDate = v => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v||''));
