@@ -156,9 +156,15 @@
   });
 
   document.addEventListener('DOMContentLoaded', () => {
-    wireGlobal();
-    wireLaunch();
-    navigate('screenLaunch');
+  // Wire stop button
+  const stopScanBtn = document.getElementById('stopScanBtn');
+  stopScanBtn?.addEventListener('click', () => {
+    MiniScanner.close();
+  });
+
+  wireGlobal();
+  wireLaunch();
+  navigate('screenLaunch');
   });
 })();
 </script>

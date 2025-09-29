@@ -1,97 +1,100 @@
 <script>
 /**
- * Scanner Bridge — emits events to window
- * - For native BarcodeDetector
- * - With preview + cancel support
+ * MiniScanner: Barcode scanner using native BarcodeDetector with live camera preview.
+ * Mounts into #scannerMount and shows #scannerSection.
  */
-
-window.MiniScanner = (function(){
+window.MiniScanner = (() => {
+  const section = document.getElementById('scannerSection');
+  const mount = document.getElementById('scannerMount');
   let stream = null;
-  let video = null;
-  let active = false;
-  let detector = null;
+  let running = false;
   let rafId = null;
+  let video = null;
+  let detector = null;
 
   async function open(){
     if (!('BarcodeDetector' in window)) {
-      console.warn('BarcodeDetector not supported');
-      alert('Barcode scanner not supported in this browser.');
+      alert('Barcode scanning not supported on this device.');
       return;
     }
 
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
     } catch (err) {
-      console.error('Camera error:', err);
-      alert('Camera access is required to scan.');
+      console.error('BarcodeDetector init failed:', err);
+      alert('Barcode scanning not supported.');
       return;
     }
 
-    if (!video) {
-      video = document.createElement('video');
-      video.setAttribute('autoplay', true);
-      video.setAttribute('muted', true);
-      video.setAttribute('playsinline', true);
-      video.style.width = '100%';
-      video.style.maxHeight = '60vh';
-      video.style.borderRadius = '16px';
-    }
-
-    video.srcObject = stream;
-
-    const mount = document.getElementById('scannerMount');
-    if (!mount) throw new Error('scannerMount not found');
+    if (!section || !mount) return;
     mount.innerHTML = '';
+
+    video = document.createElement('video');
+    video.setAttribute('autoplay', '');
+    video.setAttribute('playsinline', '');
+    video.style.width = '100%';
+    video.style.maxHeight = '60vh';
+    video.style.borderRadius = '16px';
+
     mount.appendChild(video);
+    section.classList.remove('hidden');
+    section.removeAttribute('aria-hidden');
 
-    const section = document.getElementById('scannerSection');
-    if (section) section.classList.remove('hidden');
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      video.srcObject = stream;
 
-    if (!detector) detector = new BarcodeDetector({ formats: ['ean_13', 'upc_a'] });
-    active = true;
-
-    video.onloadedmetadata = () => {
-      video.play();
-      detectLoop();
-    };
-  }
-
-  function stop(){
-    active = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    if (stream) {
-      stream.getTracks().forEach(t => t.stop());
-      stream = null;
+      await video.play();
+      running = true;
+      requestScan();
+    } catch (err) {
+      console.error('Camera access failed:', err);
+      alert('Camera access was denied or failed.');
     }
-    if (video) video.pause();
-    const section = document.getElementById('scannerSection');
-    if (section) section.classList.add('hidden');
-    const mount = document.getElementById('scannerMount');
-    if (mount) mount.innerHTML = '';
-    window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
   }
 
-  async function detectLoop(){
-    if (!active || !video || video.readyState < 2) {
-      rafId = requestAnimationFrame(detectLoop);
+  function requestScan(){
+    if (!running || !video || video.readyState < 2) {
+      rafId = requestAnimationFrame(requestScan);
       return;
     }
 
-    try {
-      const results = await detector.detect(video);
-      if (results.length) {
-        const upc = results[0].rawValue;
-        stop();
-        window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc } }));
-        return;
+    detector.detect(video).then(codes => {
+      const code = codes?.[0]?.rawValue || '';
+      if (code) {
+        close();
+        const event = new CustomEvent('upc-scanned', { detail: { upc: code } });
+        window.dispatchEvent(event);
+      } else {
+        rafId = requestAnimationFrame(requestScan);
       }
-    } catch (err) {
-      console.error('Detection error:', err);
-    }
-
-    rafId = requestAnimationFrame(detectLoop);
+    }).catch(err => {
+      console.warn('Scan error:', err);
+      rafId = requestAnimationFrame(requestScan);
+    });
   }
 
-  return { open, stop };
+  function close(){
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    if (video) {
+      video.pause();
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+        video.srcObject = null;
+      }
+      video.remove();
+    }
+
+    if (section) {
+      section.classList.add('hidden');
+      section.setAttribute('aria-hidden', 'true');
+    }
+
+    const evt = new CustomEvent('upc-scan-canceled');
+    window.dispatchEvent(evt);
+  }
+
+  return { open, close };
 })();
 </script>
