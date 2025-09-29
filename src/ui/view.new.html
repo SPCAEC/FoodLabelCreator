@@ -1,32 +1,30 @@
 <section id="screenNew" class="screen">
-  <div class="app">
-    <h1>New Product</h1>
-    <p>Looks like this is a new product! We'll need two clear photos to create a label:</p>
+  <div class="card">
+    <h2>New Product</h2>
+    <p class="subtitle">Looks like this is a new product! We’ll need two clear photos to create a label:</p>
 
-    <div class="row">
-      <!-- Front photo block -->
-      <div class="card">
-        <p><strong>Step 1:</strong> Full front of the bag/box/can</p>
-        <img id="frontPreview" class="preview hidden" />
-        <button id="frontBtn" class="btn">Take Front Photo</button>
+    <div class="photo-row">
+      <!-- Front -->
+      <div class="photo-card">
+        <label><strong>Step 1:</strong> Full front of the bag/box/can</label>
+        <img id="frontPreview" class="preview hidden" alt="Front photo preview" />
+        <button id="frontBtn" class="btn camera-btn">Take Front Photo</button>
       </div>
 
-      <!-- Ingredients photo block -->
-      <div class="card" id="ingredientsBlock" class="hidden">
-        <p><strong>Step 2:</strong> Ingredients label (flat, good lighting)</p>
-        <img id="ingPreview" class="preview hidden" />
-        <button id="ingBtn" class="btn secondary">Take Ingredients Photo</button>
+      <!-- Ingredients (initially hidden) -->
+      <div class="photo-card hidden" id="ingredientsBlock">
+        <label><strong>Step 2:</strong> Ingredients label (flat, good lighting)</label>
+        <img id="ingPreview" class="preview hidden" alt="Ingredients photo preview" />
+        <button id="ingBtn" class="btn camera-btn">Take Ingredients Photo</button>
       </div>
     </div>
 
-    <!-- Continue -->
     <div class="actions">
       <button id="nextToIngredients" class="btn hidden">Continue</button>
-      <button class="btn secondary startover startOver">Start Over</button>
+      <button class="btn startover startOver" type="button">Start Over</button>
     </div>
 
-    <!-- Status -->
-    <div id="newStatus" class="msg" role="status" aria-live="polite"></div>
+    <div class="msg" id="newStatus" role="status" aria-live="polite"></div>
     <div id="newLoad" class="spinner" hidden></div>
   </div>
 </section>
