@@ -33,13 +33,18 @@ function findByUPCInSheet_(upc12) {
   if (idxUPC === -1) throw new Error('Header missing: UPC');
 
   for (let r = 1; r < values.length; r++) {
-    const norm = normalizeUPC_(values[r][idxUPC]);
+    const cell = values[r][idxUPC];
+    const norm = normalizeUPC_(cell);
+    console.log(`[ROW ${r}] Raw: ${cell}, Normalized: ${norm}`);
+
     if (norm === upc12) {
       const rec = {};
       headers.forEach((h, i) => rec[h] = values[r][i]);
+      console.log('[MATCH FOUND]', rec);
       return rec;
     }
   }
+  console.log('[NO MATCH]', upc12);
   return null;
 }
 
@@ -50,6 +55,9 @@ function apiLookup(payload) {
   return rpcTry(() => {
     const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
     const upc = normalizeUPC_(raw);
+
+    console.log('[LOOKUP]', { raw, normalized: upc });
+
     if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
 
     const item = findByUPCInSheet_(upc);
@@ -107,7 +115,6 @@ function apiUploadIngredients(upc, dataUrl) {
   });
 }
 
-// Run AI extraction on two photos (base64) and return structured data
 // Run AI extraction on two photos (base64) and return structured data
 function apiExtractFromImages(payload) {
   return rpcTry(() => {

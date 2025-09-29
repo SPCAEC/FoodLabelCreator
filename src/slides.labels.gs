@@ -30,6 +30,12 @@ function generateLabelPDF_(payload) {
     ? CFG.SLIDES_TEMPLATE_TREAT_ID
     : CFG.SLIDES_TEMPLATE_FOOD_ID;
 
+  if (!templateId) {
+    const msg = `generateLabelPDF_: Missing template ID for kind "${kind}"`;
+    logE(msg, { upc: normUPC, payload });
+    throw new Error(msg);
+  }
+
   // Open working copy
   const copyName = `Label_${normUPC || 'unknown'}_${nameStamp}`;
   const copy = DriveApp.getFileById(templateId).makeCopy(copyName);
@@ -70,7 +76,7 @@ function generateLabelPDF_(payload) {
 
   // Export to PDF
   const blob = DriveApp.getFileById(copy.getId()).getAs('application/pdf');
-  const outFile = DriveApp.getFolderById(CFG.OUTPUT_PDF_FOLDER_ID) // ✅ corrected key
+  const outFile = DriveApp.getFolderById(CFG.OUTPUT_PDF_FOLDER_ID)
     .createFile(blob)
     .setName(copyName + '.pdf');
 
