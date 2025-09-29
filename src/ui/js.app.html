@@ -180,6 +180,8 @@
   }
 
   function wireNewItem() {
+    state.photos = state.photos || {};
+    
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
     const ingBtn = $('#ingredientsBtn');
@@ -311,7 +313,7 @@
         front: state.photos.front?.substring(0, 30),
         ingredients: state.photos.ingredients?.substring(0, 30)
       });
-      
+
       try {
         const extracted = await API.extract({
           upc: state.upc,
