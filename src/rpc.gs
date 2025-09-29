@@ -108,6 +108,10 @@ function apiUploadIngredients(upc, dataUrl) {
 }
 
 // Run AI extraction on two photos (base64) and return structured data
-function apiExtractFromImages(req) {
-  return rpcTry(() => aiExtract_(req));
+// Run AI extraction on two photos (base64) and return structured data
+function apiExtractFromImages(front, ingredients) {
+  return rpcTry(() => {
+    if (!front || !ingredients) throw new Error('Missing image data');
+    return aiExtract_({ front, ingredients });
+  });
 }
