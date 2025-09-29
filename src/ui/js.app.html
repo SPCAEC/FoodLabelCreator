@@ -1,9 +1,9 @@
 <script>
 /**
- * App controller (finalized with autofocus + cleanup)
- * - Handles barcode scan, lookup, photo capture
- * - Launches camera with autofocus for ingredients only
- * - Sends data to API, renders review screen
+ * App controller (rewritten cleanly)
+ * - Launches scanner, looks up UPC
+ * - Navigates user through label creation flow
+ * - Works with backend API via google.script.run (API.*)
  */
 
 (function(){
@@ -47,19 +47,24 @@
 
   function resetApp(){
     Object.assign(state, {
-      upc: '', item: null, exp: '',
+      upc: '',
+      item: null,
+      exp: '',
       photos: { front: null, ingredients: null },
       pdf: { url: '', id: '' },
       needs: { ingredients: false }
     });
 
-    $('#upcInput').value = '';
-    $('#lookupBtn').disabled = true;
+    const upc = $('#upcInput');
+    const lookupBtn = $('#lookupBtn');
+    if (upc) upc.value = '';
+    if (lookupBtn) lookupBtn.disabled = true;
+
     navigate('screenLaunch');
   }
 
   function wireGlobal(){
-    $$('.startOver').forEach(btn => btn.addEventListener('click', resetApp));
+    $$('.startOver').forEach(b => b.addEventListener('click', resetApp));
   }
 
   function wireLaunch(){
@@ -122,6 +127,33 @@
     }
   }
 
+  window.addEventListener('upc-scanned', async ev => {
+    const upc = ev.detail?.upc || '';
+    const status = $('#launchInfo');
+    const load = $('#launchLoad');
+    const input = $('#upcInput');
+    const lookupBtn = $('#lookupBtn');
+
+    if (input) input.value = upc;
+    if (lookupBtn) lookupBtn.disabled = !isValidUPC(upc);
+    setMsg(status, 'Scanned ✓ Looking up…', 'success');
+    spinner(true, load);
+
+    try {
+      state.upc = upc;
+      await doLookup(status, load);
+    } catch (e) {
+      console.error(e);
+      setMsg(status, 'Scan failed. Try again.', 'error');
+    } finally {
+      spinner(false, load);
+    }
+  });
+
+  window.addEventListener('upc-scan-canceled', () => {
+    setMsg($('#launchInfo'), 'Scanner closed.');
+  });
+
   function normalizeItemFromSheet(item) {
     return {
       upc: String(item.upc || '').trim(),
@@ -130,14 +162,14 @@
       flavor: String(item.flavor || '').trim(),
       species: String(item.species || '').trim(),
       lifestage: String(item.lifestage || '').trim(),
-      ingredients: String(item.ingredients || '').trim(),
-      type: String(item.type || '').trim()
+      ingredients: String(item.ingredients || '').trim()
     };
   }
 
   function renderReview() {
     const item = state.item || {};
     $('#revExp').value = state.exp || '';
+
     $('#revSpecies').value = item.species || 'Dog';
     $('#revStage').value = item.lifestage || 'Adult';
     $('#revBrand').value = item.brand || '';
@@ -145,13 +177,13 @@
     $('#revFlavor').value = item.flavor || '';
     $('#revIngredients').value = item.ingredients || '';
     $('#revTreatFood').value = item.type || '';
-  }
+    }
 
-  function wireNewItem(){
+  function wireNewItem() {
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
-    const ingBtn = $('#ingredientsBtn');
-    const ingPreview = $('#ingredientsPreview');
+    const ingBtn = $('#ingBtn');
+    const ingPreview = $('#ingPreview');
     const ingBlock = $('#ingredientsBlock');
     const nextBtn = $('#nextToIngredients');
     const msg = $('#newStatus');
@@ -160,33 +192,28 @@
     function stopStream(stream) {
       if (stream) stream.getTracks().forEach(track => track.stop());
 
+      // 👇 Reveal Step 2 *only after* front photo
       if (state.photos.front && !state.photos.ingredients) {
-        ingBlock?.classList.remove('hidden');
+        document.querySelector('#ingredientsBlock')?.classList.remove('hidden');
       }
     }
 
-    function launchCamera({ onCapture, autofocus = false }) {
+    function launchCamera({ onCapture }) {
       const overlay = document.createElement('div');
       overlay.className = 'camera-overlay';
+
       overlay.innerHTML = `
         <video autoplay playsinline></video>
         <button class="btn take">Take Photo</button>
         <button class="btn secondary cancel">Cancel</button>
       `;
-      document.body.appendChild(overlay);
 
+      document.body.appendChild(overlay);
       const video = overlay.querySelector('video');
       const takeBtn = overlay.querySelector('.take');
       const cancelBtn = overlay.querySelector('.cancel');
 
-      const constraints = {
-        video: {
-          facingMode: 'environment',
-          ...(autofocus ? { focusMode: 'continuous' } : {})
-        }
-      };
-
-      navigator.mediaDevices.getUserMedia(constraints)
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
         .then(stream => {
           video.srcObject = stream;
 
@@ -200,6 +227,7 @@
 
             stopStream(stream);
             overlay.remove();
+
             if (onCapture) onCapture(dataUrl);
           };
 
@@ -215,35 +243,33 @@
     }
 
     frontBtn?.addEventListener('click', () => {
-      frontBtn.classList.add('hidden');
-      ingBlock?.classList.add('hidden');
       launchCamera({
         onCapture: dataUrl => {
           frontPreview.src = dataUrl;
           frontPreview.classList.remove('hidden');
           state.photos.front = dataUrl;
 
+          ingBlock?.classList.remove('hidden');
           setMsg(msg, 'Processing front photo…', 'success');
           spinner(true, spinnerEl);
+
           setTimeout(() => {
             setMsg(msg, '');
             spinner(false, spinnerEl);
           }, 1000);
 
-          ingBlock?.classList.remove('hidden');
           checkNextReady();
         }
       });
-
-      setTimeout(() => {
-        document.querySelector('.camera-overlay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
     });
 
+    const ingBtn = document.getElementById('ingredientsBtn');
+    const ingPreview = document.getElementById('ingredientsPreview');
+
     ingBtn?.addEventListener('click', () => {
-      ingBtn.classList.add('hidden');
+      ingBtn.classList.add('hidden'); // 🔒 hide after used
+
       launchCamera({
-        autofocus: true,
         onCapture: dataUrl => {
           ingPreview.src = dataUrl;
           ingPreview.classList.remove('hidden');
@@ -251,6 +277,7 @@
 
           setMsg(msg, 'Processing ingredients photo…', 'success');
           spinner(true, spinnerEl);
+
           setTimeout(() => {
             setMsg(msg, '');
             spinner(false, spinnerEl);
@@ -259,50 +286,72 @@
           checkNextReady();
         }
       });
-      setTimeout(() => {
-        document.querySelector('.camera-overlay')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 300);
     });
 
-    function checkNextReady(){
-      if (state.photos.front && state.photos.ingredients) {
+    function checkNextReady() {
+      const hasFront = !!state.photos.front;
+      const hasIng = !!state.photos.ingredients;
+      if (hasFront && hasIng) {
         nextBtn?.classList.remove('hidden');
       }
     }
 
     nextBtn?.addEventListener('click', async () => {
-      if (!state.photos.front || !state.photos.ingredients) return;
-      setMsg(msg, 'Extracting label data…', 'success');
-      spinner(true, spinnerEl);
+    if (!state.photos.front || !state.photos.ingredients) return;
 
-      try {
-        const extracted = await API.extract({
-          upc: state.upc,
-          frontDataUrl: state.photos.front,
-          ingDataUrl: state.photos.ingredients
-        });
+    setMsg(msg, 'Extracting label data…', 'success');
+    spinner(true, spinnerEl);
 
-        state.item = normalizeItemFromSheet({
-          upc: state.upc,
-          ...extracted
-        });
+    try {
+      const extracted = await API.extract({
+        upc: state.upc,
+        frontDataUrl: state.photos.front,
+        ingDataUrl: state.photos.ingredients
+      });
 
-        navigate('screenReview');
-        setTimeout(renderReview, 0);
-      } catch (err) {
-        console.error('[extract error]', err);
-        setMsg(msg, 'AI extraction failed. Please try again.', 'error');
-      } finally {
-        spinner(false, spinnerEl);
-      }
+      state.item = normalizeItemFromSheet({
+        upc: state.upc,
+        ...extracted
+      });
+
+      navigate('screenReview');
+      setTimeout(renderReview, 0);
+    } catch (err) {
+      console.error('[extract error]', err);
+      setMsg(msg, 'AI extraction failed. Please try again.', 'error');
+    } finally {
+      spinner(false, spinnerEl);
+    }
     });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     wireGlobal();
     wireLaunch();
-    wireNewItem();
+    wireNewItem(); // ← required for photo capture
     navigate('screenLaunch');
+
+    // 👇 New: wire up front photo button behavior
+    const frontBtn = document.querySelector('#frontBtn');
+    const ingredientsBlock = document.querySelector('#ingredientsBlock');
+
+    frontBtn.addEventListener('click', async () => {
+      frontBtn.classList.add('hidden');        // 🔒 hide front button
+      ingredientsBlock?.classList.add('hidden'); // 🔒 ensure Step 2 still hidden
+
+      await startCamera('front', {
+        video: {
+          facingMode: 'environment',
+          focusMode: 'continuous' // 🔍 attempt to enable autofocus
+        }
+      });
+
+      // 👇 NEW: Scroll camera preview to top of screen
+      setTimeout(() => {
+        const previewEl = document.querySelector('.camera');
+        if (previewEl) previewEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300); // slight delay to ensure camera is drawn
+    });
   });
 })();
 </script>
