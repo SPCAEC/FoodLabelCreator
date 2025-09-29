@@ -12,13 +12,19 @@ function aiExtract_(req) {
     "Use concise brand and productName; flavor is a short descriptor like 'Chicken & Rice'."
   ].join(' ');
 
+  const front = req.frontDataUrl;
+  const ingredients = req.ingDataUrl;
+
   const images = [];
-  if (req.frontDataUrl) {
-    images.push({ type: 'image_url', image_url: { url: req.frontDataUrl } });
-  }
-  if (req.ingDataUrl) {
-    images.push({ type: 'image_url', image_url: { url: req.ingDataUrl } });
-  }
+    if (front) {
+    images.push({ type: 'image_url', image_url: { url: front } });
+    }
+    if (ingredients) {
+    images.push({ type: 'image_url', image_url: { url: ingredients } });
+    }
+    if (!front || !ingredients) {
+      return { ok: false, message: 'Missing image data' };
+    }
   
   console.log('[Image Data Lengths]', {
     front: front?.length,
