@@ -190,4 +190,26 @@ video{ width:100%; max-height:60vh; border-radius:16px }
   min-width: 200px;
   margin: 0.75rem auto 0 auto;
 }
+
+/* Side-by-side layout for photo capture steps */
+.photo-grid {
+  display: grid;
+  gap: 2rem;
+  grid-template-columns: 1fr;
+  margin-top: 1rem;
+}
+.photo-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.photo-block label {
+  margin-bottom: 0.5rem;
+}
+@media (min-width: 700px) {
+  .photo-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
 </style>

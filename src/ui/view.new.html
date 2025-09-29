@@ -1,30 +1,25 @@
 <section id="screenNew" class="screen">
-  <div class="card">
-    <h2>New Product</h2>
-    <p class="subtitle">Looks like this is a new product! We’ll need two clear photos to create a label:</p>
+  <div id="photoSteps" class="card">
+  <p>Looks like this is a new product! We'll need two clear photos to create a label:</p>
 
-    <div class="photo-row">
-      <!-- Front -->
-      <div class="photo-card">
-        <label><strong>Step 1:</strong> Full front of the bag/box/can</label>
-        <img id="frontPreview" class="preview hidden" alt="Front photo preview" />
-        <button id="frontBtn" class="btn camera-btn">Take Front Photo</button>
-      </div>
-
-      <!-- Ingredients (initially hidden) -->
-      <div class="photo-card hidden" id="ingredientsBlock">
-        <label><strong>Step 2:</strong> Ingredients label (flat, good lighting)</label>
-        <img id="ingPreview" class="preview hidden" alt="Ingredients photo preview" />
-        <button id="ingBtn" class="btn camera-btn">Take Ingredients Photo</button>
-      </div>
+  <div class="photo-grid">
+    <!-- Step 1: Front -->
+    <div class="photo-block">
+      <label><strong>Step 1:</strong> Full front of the bag/box/can</label>
+      <img id="frontPreview" class="preview hidden" alt="Front photo preview">
+      <button id="frontBtn" class="btn">Take Front Photo</button>
     </div>
 
-    <div class="actions">
-      <button id="nextToIngredients" class="btn hidden">Continue</button>
-      <button class="btn startover startOver" type="button">Start Over</button>
+    <!-- Step 2: Ingredients (initially hidden) -->
+    <div id="ingredientsBlock" class="photo-block hidden">
+      <label><strong>Step 2:</strong> Ingredients label (flat, good lighting)</label>
+      <img id="ingredientsPreview" class="preview hidden" alt="Ingredients photo preview">
+      <button id="ingredientsBtn" class="btn secondary">Take Ingredients Photo</button>
     </div>
-
-    <div class="msg" id="newStatus" role="status" aria-live="polite"></div>
-    <div id="newLoad" class="spinner" hidden></div>
   </div>
+
+  <div class="actions">
+    <button id="startoverBtn" class="btn startover">Start Over</button>
+  </div>
+</div>
 </section>

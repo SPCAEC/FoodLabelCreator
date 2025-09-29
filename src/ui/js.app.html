@@ -191,6 +191,11 @@
 
     function stopStream(stream) {
       if (stream) stream.getTracks().forEach(track => track.stop());
+
+      // 👇 Reveal Step 2 *only after* front photo
+      if (state.photos.front && !state.photos.ingredients) {
+        document.querySelector('#ingredientsBlock')?.classList.remove('hidden');
+      }
     }
 
     function launchCamera({ onCapture }) {
@@ -320,6 +325,16 @@
     wireLaunch();
     wireNewItem(); // ← required for photo capture
     navigate('screenLaunch');
+
+    // 👇 New: wire up front photo button behavior
+    const frontBtn = document.querySelector('#frontBtn');
+    const ingredientsBlock = document.querySelector('#ingredientsBlock');
+
+    frontBtn.addEventListener('click', async () => {
+      frontBtn.classList.add('hidden'); // 🔒 hide front button
+      ingredientsBlock?.classList.add('hidden'); // 🔒 hide Step 2
+      await startCamera('front'); // 📸 launch front camera
+    });
   });
 })();
 </script>
