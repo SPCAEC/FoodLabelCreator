@@ -12,8 +12,8 @@ function aiExtract_(req) {
     "Use concise brand and productName; flavor is a short descriptor like 'Chicken & Rice'."
   ].join(' ');
 
-  const front = req.frontDataUrl;
-  const ingredients = req.ingDataUrl;
+  const front = req.front || req.frontDataUrl;
+  const ingredients = req.ingredients || req.ingDataUrl;
 
   if (!front || !ingredients) {
     console.error('[ABORT] Missing image data:', {
