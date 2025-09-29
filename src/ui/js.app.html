@@ -209,9 +209,9 @@
 
       try {
         const extracted = await API.extract({
-          upc: state.upc,
-          frontDataUrl: front,
-          ingDataUrl: ing
+          upc: state.upc, // optional
+          front: state.photos.front,
+          ingredients: state.photos.ingredients
         });
 
         console.log('[EXTRACT RESULT]', extracted);
