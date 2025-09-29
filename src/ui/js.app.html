@@ -154,9 +154,65 @@
     setMsg($('#launchInfo'), 'Scanner closed.');
   });
 
+  function wireNewItem(){
+    const frontInput = $('#frontInput');
+    const frontBtn = $('#frontBtn');
+    const frontPreview = $('#frontPreview');
+    const ingInput = $('#ingInput');
+    const ingBtn = $('#ingBtn');
+    const ingPreview = $('#ingPreview');
+    const nextBtn = $('#nextToIngredients');
+
+    frontBtn?.addEventListener('click', () => {
+      frontInput?.click();
+    });
+
+    frontInput?.addEventListener('change', () => {
+      const file = frontInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          frontPreview.src = ev.target.result;
+          frontPreview.classList.remove('hidden');
+          state.photos.front = ev.target.result;
+          $('#ingredientsBlock')?.classList.remove('hidden');
+          checkNextReady();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    ingBtn?.addEventListener('click', () => {
+      ingInput?.click();
+    });
+
+    ingInput?.addEventListener('change', () => {
+      const file = ingInput.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = ev => {
+          ingPreview.src = ev.target.result;
+          ingPreview.classList.remove('hidden');
+          state.photos.ingredients = ev.target.result;
+          checkNextReady();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function checkNextReady(){
+      const hasFront = !!state.photos.front;
+      const hasIng = !!state.photos.ingredients;
+      if (hasFront && hasIng) {
+        nextBtn?.classList.remove('hidden');
+      }
+    }
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     wireGlobal();
     wireLaunch();
+    wireNewItem(); // ← required for photo capture
     navigate('screenLaunch');
   });
 })();
