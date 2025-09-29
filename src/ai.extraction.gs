@@ -15,16 +15,20 @@ function aiExtract_(req) {
   const front = req.frontDataUrl;
   const ingredients = req.ingDataUrl;
 
-  const images = [];
-    if (front) {
-    images.push({ type: 'image_url', image_url: { url: front } });
-    }
-    if (ingredients) {
-    images.push({ type: 'image_url', image_url: { url: ingredients } });
-    }
-    if (!front || !ingredients) {
-      throw new Error(`Missing image data. Front: ${!!front}, Ingredients: ${!!ingredients}`);
-    }
+  if (!front || !ingredients) {
+    console.error('[ABORT] Missing image data:', {
+      frontType: typeof front,
+      ingType: typeof ingredients,
+      frontLength: front?.length,
+      ingLength: ingredients?.length
+    });
+    return { ok: false, message: 'Missing image data' };
+  }
+
+  const images = [
+    { type: 'image_url', image_url: { url: front } },
+    { type: 'image_url', image_url: { url: ingredients } }
+  ];
   
   console.log('[Image Data Lengths]', {
     front: front?.length,
