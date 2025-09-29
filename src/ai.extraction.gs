@@ -1,3 +1,5 @@
+/** AI Extraction Service – OpenAI Vision → Structured Label Metadata */
+
 function aiExtract_(req) {
   if (!CFG.ENABLE_AI) throw new Error('AI disabled');
   if (!CFG.OPENAI_API_KEY) throw new Error('Missing OPENAI_API_KEY script property');
@@ -10,29 +12,19 @@ function aiExtract_(req) {
     "Use concise brand and productName; flavor is a short descriptor like 'Chicken & Rice'."
   ].join(' ');
 
-  // 🔑 Correctly build image blocks
   const images = [];
   if (req.frontDataUrl) {
-    images.push({
-      type: 'image_url',
-      image_url: { url: req.frontDataUrl }
-    });
+    images.push({ type: 'image_url', image_url: { url: req.frontDataUrl } });
   }
   if (req.ingDataUrl) {
-    images.push({
-      type: 'image_url',
-      image_url: { url: req.ingDataUrl }
-    });
+    images.push({ type: 'image_url', image_url: { url: req.ingDataUrl } });
   }
-
-  const useResponseFormat = CFG.OPENAI_MODEL === 'gpt-4o';
 
   const payload = {
     model: CFG.OPENAI_MODEL,
     messages: [{
       role: 'user',
       content: [
-        // text first, then all images
         { type: 'text', text: instructions },
         ...images
       ]
@@ -40,13 +32,13 @@ function aiExtract_(req) {
     temperature: 0.2
   };
 
-  if (useResponseFormat) {
+  if (CFG.OPENAI_MODEL === 'gpt-4o') {
     payload.response_format = { type: 'json_object' };
   }
 
   console.log('[GPT Payload]', JSON.stringify(payload, null, 2));
 
-  const res = UrlFetchApp.fetch(`${CFG.OPENAI_BASE_URL}/chat/completions`, {
+  const response = UrlFetchApp.fetch(`${CFG.OPENAI_BASE_URL}/chat/completions`, {
     method: 'post',
     muteHttpExceptions: true,
     headers: {
@@ -56,49 +48,47 @@ function aiExtract_(req) {
     payload: JSON.stringify(payload)
   });
 
-  const status = res.getResponseCode();
-  const body = res.getContentText();
-  console.log('[GPT Response]', body);
+  const status = response.getResponseCode();
+  const rawBody = response.getContentText();
+  console.log('[GPT Response]', rawBody);
 
   if (status >= 300) {
-    throw new Error(`OpenAI error: ${status} ${body}`);
+    throw new Error(`OpenAI error ${status}: ${rawBody}`);
   }
 
-  const parsed = JSON.parse(body);
-  const msgContent = parsed.choices?.[0]?.message?.content;
+  const parsed = JSON.parse(rawBody);
+  const msg = parsed.choices?.[0]?.message?.content;
 
-  if (!msgContent) {
-    console.warn('[aiExtract_] No GPT content returned:', parsed);
+  if (!msg) {
+    console.warn('[aiExtract_] No content in GPT response:', parsed);
     throw new Error('AI returned no message content');
   }
 
-  let json = {};
+  let rawJson;
   try {
-    json = JSON.parse(msgContent);
+    rawJson = JSON.parse(msg);
   } catch (e) {
-    console.warn('[aiExtract_] Failed to parse JSON from GPT response:', msgContent);
-    throw new Error('Failed to parse JSON response from AI');
+    console.warn('[aiExtract_] Invalid JSON content:', msg);
+    throw new Error('Failed to parse AI response as JSON');
   }
 
-  console.log('[Parsed JSON]', JSON.stringify(json, null, 2));
+  console.log('[Parsed JSON]', JSON.stringify(rawJson, null, 2));
   console.log('[Image Data Lengths]', {
     front: req.frontDataUrl?.length,
     ingredients: req.ingDataUrl?.length
   });
 
-  // Normalize output keys
-  const out = {
-    brand: (json.brand || '').trim(),
-    productName: (json.productName || '').trim(),
-    flavor: (json.flavor || '').trim(),
-    species: normSpecies_(json.species),
-    lifestage: normLifestage_(json.lifestage),
-    ingredients: (json.ingredients || '').replace(/\s*,\s*/g, ', ').trim()
+  return {
+    brand:        (rawJson.brand || '').trim(),
+    productName:  (rawJson.productName || '').trim(),
+    flavor:       (rawJson.flavor || '').trim(),
+    species:      normSpecies_(rawJson.species),
+    lifestage:    normLifestage_(rawJson.lifestage),
+    ingredients:  (rawJson.ingredients || '').replace(/\s*,\s*/g, ', ').trim()
   };
-
-  return out;
 }
 
+// Normalize species string → "Dog" | "Cat" | ""
 function normSpecies_(val) {
   const s = String(val || '').toLowerCase();
   if (s.includes('dog')) return 'Dog';
@@ -106,6 +96,7 @@ function normSpecies_(val) {
   return '';
 }
 
+// Normalize lifestage → "Juvenile" | "Adult" | "Senior" | ""
 function normLifestage_(val) {
   const s = String(val || '').toLowerCase();
   if (s.includes('juvenile') || s.includes('puppy') || s.includes('kitten')) return 'Juvenile';

@@ -1,28 +1,28 @@
-/** UI-callable APIs — return shapes the UI expects (no rpcTry wrapper) */
+/** Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration) */
 
 /* ---------- Helpers ---------- */
 
-// Normalize to a forgiving 12-digit UPC-A
-function normalizeUPC_(v) {
-  let s = String(v == null ? '' : v).replace(/\D/g, '');
-  if (s.length === 13 && s.charAt(0) === '0') s = s.slice(1); // EAN-13 → UPC-A
+// Normalize any input to a 12-digit UPC-A string
+function normalizeUPC_(value) {
+  let s = String(value || '').replace(/\D/g, '');
+  if (s.length === 13 && s.startsWith('0')) s = s.slice(1); // Convert EAN-13 → UPC-A
   if (s.length > 13) return '';
-  if (s.length > 0 && s.length < 12) s = s.padStart(12, '0');  // recover lost leading zeros
+  if (s.length < 12) s = s.padStart(12, '0'); // Recover leading zeros
   return s.length === 12 ? s : '';
 }
 
-// Open the configured sheet (from Script Properties)
+// Open configured sheet from script properties
 function getSheet_() {
   const props = PropertiesService.getScriptProperties();
   const sheetId   = props.getProperty('SHEET_ID')   || '';
   const sheetName = props.getProperty('SHEET_NAME') || 'Products';
   const ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActive();
   const sh = ss.getSheetByName(sheetName);
-  if (!sh) throw new Error('Sheet not found: ' + sheetName);
+  if (!sh) throw new Error(`Sheet not found: ${sheetName}`);
   return sh;
 }
 
-/** Scan the sheet for a row whose normalized UPC matches upc12; returns a record keyed by headers. */
+// Scan sheet for a row where normalized UPC matches
 function findByUPCInSheet_(upc12) {
   const sh = getSheet_();
   const values = sh.getDataRange().getValues();
@@ -30,11 +30,11 @@ function findByUPCInSheet_(upc12) {
 
   const headers = values[0].map(String);
   const idxUPC = headers.indexOf('UPC');
-  if (idxUPC === -1) throw new Error('UPC column not found (header: UPC)');
+  if (idxUPC === -1) throw new Error('Header missing: UPC');
 
   for (let r = 1; r < values.length; r++) {
-    const cellNorm = normalizeUPC_(values[r][idxUPC]);
-    if (cellNorm === upc12) {
+    const norm = normalizeUPC_(values[r][idxUPC]);
+    if (norm === upc12) {
       const rec = {};
       headers.forEach((h, i) => rec[h] = values[r][i]);
       return rec;
@@ -43,25 +43,21 @@ function findByUPCInSheet_(upc12) {
   return null;
 }
 
-/* ---------- Lookup ---------- */
+/* ---------- Public APIs ---------- */
 
-/** Lookup by UPC. Accepts a string or { upc } from the client. */
+// Lookup a UPC and return the row if found
 function apiLookup(payload) {
   return rpcTry(() => {
     const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
     const upc = normalizeUPC_(raw);
     if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
 
-    const rec = findByUPCInSheet_(upc);
-    if (!rec) return { found: false, upc };
-
-    return { found: true, upc, item: rec };
+    const item = findByUPCInSheet_(upc);
+    return item ? { found: true, upc, item } : { found: false, upc };
   });
 }
 
-/* ---------- Create label ---------- */
-
-/** Preferred endpoint used by the new client code. */
+// Generate label PDF and upsert record
 function apiCreateLabels(payload) {
   return rpcTry(() => {
     if (!payload) throw new Error('Missing payload');
@@ -70,13 +66,13 @@ function apiCreateLabels(payload) {
 
     const record = payload.sheetRecord || {
       UPC: upc,
-      Species: payload.species || payload.Species || '',
-      Lifestage: payload.lifestage || payload.Lifestage || 'Adult',
-      Brand: payload.brand || payload.Brand || '',
-      ProductName: payload.productName || payload.ProductName || '',
-      'Recipe/Flavor': payload.flavor || payload.Flavor || '',
-      'Treat/Food': payload.type || payload['Treat/Food'] || 'Food',
-      Ingredients: payload.ingredients || payload.Ingredients || ''
+      Species:       payload.species      || payload.Species      || '',
+      Lifestage:     payload.lifestage    || payload.Lifestage    || 'Adult',
+      Brand:         payload.brand        || payload.Brand        || '',
+      ProductName:   payload.productName  || payload.ProductName  || '',
+      'Recipe/Flavor': payload.flavor     || payload.Flavor       || '',
+      'Treat/Food':  payload.type         || payload['Treat/Food']|| 'Food',
+      Ingredients:   payload.ingredients  || payload.Ingredients  || ''
     };
 
     const pdf = generateLabelPDF_(payload);
@@ -86,33 +82,32 @@ function apiCreateLabels(payload) {
   });
 }
 
-/** Backward compatibility for older client calls. */
+// Backward compatibility alias
 function apiSaveAndCreateLabel(payload) {
   return apiCreateLabels(payload);
 }
 
-/* ---------- Image uploads (optional; normalize UPC) ---------- */
-
+// Save front image blob (base64 Data URL)
 function apiUploadFront(upc, dataUrl) {
   return rpcTry(() => {
-    const n = normalizeUPC_(upc);
-    if (!n || !dataUrl) throw new Error('Missing image or UPC');
-    const f = saveImage_(n, dataUrl, 'front');
-    return { file: f };
+    const norm = normalizeUPC_(upc);
+    if (!norm || !dataUrl) throw new Error('Missing image or UPC');
+    const file = saveImage_(norm, dataUrl, 'front');
+    return { file };
   });
 }
 
+// Save ingredients image blob (base64 Data URL)
 function apiUploadIngredients(upc, dataUrl) {
   return rpcTry(() => {
-    const n = normalizeUPC_(upc);
-    if (!n || !dataUrl) throw new Error('Missing image or UPC');
-    const f = saveImage_(n, dataUrl, 'ingredients');
-    return { file: f };
+    const norm = normalizeUPC_(upc);
+    if (!norm || !dataUrl) throw new Error('Missing image or UPC');
+    const file = saveImage_(norm, dataUrl, 'ingredients');
+    return { file };
   });
 }
 
-/* ---------- AI extraction ---------- */
-/** New client sends API.extract(front?, ingredients?) → apiExtractFromImages({ front, ingredients }) */
+// Run AI extraction on two photos (base64) and return structured data
 function apiExtractFromImages(req) {
   return rpcTry(() => aiExtract_(req));
 }

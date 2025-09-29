@@ -1,10 +1,9 @@
 <script>
 /**
- * App controller (clean, fixed)
- * - Scans UPCs or looks up manually
- * - Captures front and ingredient photos
- * - Auto-focuses ingredients photo
- * - Scrolls camera preview to top
+ * App controller for Food Label Creator (clean rewrite)
+ * - Launch screen: scan or enter UPC
+ * - New item flow: capture front + ingredients photos, run AI
+ * - Result flow: review or edit metadata before generating label
  */
 (function(){
   const $ = sel => document.querySelector(sel);
@@ -21,7 +20,7 @@
   console.log('[INIT] state is', state);
 
   const isValidUPC = v => /^\d{12}$/.test(String(v || '').trim());
-  const isValidDate = v => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v||''));
+  const isValidDate = v => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v || ''));
 
   function setMsg(el, text, type){
     if (!el) return;
@@ -56,38 +55,35 @@
       needs: { ingredients: false }
     });
 
-    const upc = $('#upcInput');
-    const lookupBtn = $('#lookupBtn');
-    if (upc) upc.value = '';
-    if (lookupBtn) lookupBtn.disabled = true;
-
+    $('#upcInput').value = '';
+    $('#lookupBtn').disabled = true;
     navigate('screenLaunch');
   }
 
   function wireGlobal(){
-    $$('.startOver').forEach(b => b.addEventListener('click', resetApp));
+    $$('.startOver').forEach(btn => btn.addEventListener('click', resetApp));
   }
 
   function wireLaunch(){
-    const upcInput = $('#upcInput');
+    const input = $('#upcInput');
     const lookupBtn = $('#lookupBtn');
     const scanBtn = $('#scanBtn');
     const clearBtn = $('#clearBtn');
     const status = $('#launchInfo');
     const load = $('#launchLoad');
 
-    function updateLookupBtn(){
-      lookupBtn.disabled = !isValidUPC(upcInput.value);
+    function updateBtn(){
+      lookupBtn.disabled = !isValidUPC(input.value);
     }
 
-    upcInput.addEventListener('input', () => {
-      upcInput.value = upcInput.value.replace(/\D/g, '').slice(0, 12);
-      updateLookupBtn();
+    input.addEventListener('input', () => {
+      input.value = input.value.replace(/\D/g, '').slice(0, 12);
+      updateBtn();
     });
 
     lookupBtn.addEventListener('click', async () => {
       if (lookupBtn.disabled) return;
-      state.upc = upcInput.value;
+      state.upc = input.value;
       await doLookup(status, load);
     });
 
@@ -97,12 +93,12 @@
     });
 
     clearBtn?.addEventListener('click', () => {
-      upcInput.value = '';
-      updateLookupBtn();
+      input.value = '';
+      updateBtn();
       setMsg(status, '');
     });
 
-    updateLookupBtn();
+    updateBtn();
     spinner(false, load);
   }
 
@@ -112,7 +108,7 @@
     try {
       const res = await API.lookup(state.upc);
       if (res?.found) {
-        state.item = normalizeItemFromSheet(res.item || {});
+        state.item = normalizeItem(res.item);
         navigate('screenResults');
         setTimeout(renderResults, 0);
       } else {
@@ -120,9 +116,9 @@
         navigate('screenNew');
       }
       setMsg(statusEl, '');
-    } catch(err){
+    } catch (err) {
       console.error('[lookup error]', err);
-      setMsg(statusEl, 'Lookup failed. Try again.', 'error');
+      setMsg(statusEl, 'Lookup failed.', 'error');
     } finally {
       spinner(false, loadEl);
     }
@@ -130,221 +126,149 @@
 
   window.addEventListener('upc-scanned', async ev => {
     const upc = ev.detail?.upc || '';
-    const status = $('#launchInfo');
-    const load = $('#launchLoad');
-    const input = $('#upcInput');
-    const lookupBtn = $('#lookupBtn');
-
-    if (input) input.value = upc;
-    if (lookupBtn) lookupBtn.disabled = !isValidUPC(upc);
-    setMsg(status, 'Scanned ✓ Looking up…', 'success');
-    spinner(true, load);
-
+    $('#upcInput').value = upc;
+    $('#lookupBtn').disabled = !isValidUPC(upc);
+    setMsg($('#launchInfo'), 'Scanned ✓ Looking up…', 'success');
+    spinner(true, $('#launchLoad'));
     try {
       state.upc = upc;
-      await doLookup(status, load);
+      await doLookup($('#launchInfo'), $('#launchLoad'));
     } catch (e) {
-      console.error(e);
-      setMsg(status, 'Scan failed. Try again.', 'error');
-    } finally {
-      spinner(false, load);
+      setMsg($('#launchInfo'), 'Scan failed.', 'error');
     }
+    spinner(false, $('#launchLoad'));
   });
 
   window.addEventListener('upc-scan-canceled', () => {
     setMsg($('#launchInfo'), 'Scanner closed.');
   });
 
-  function normalizeItemFromSheet(item) {
+  function normalizeItem(item){
     return {
-      upc: String(item.upc || '').trim(),
-      brand: String(item.brand || '').trim(),
-      productName: String(item.productName || '').trim(),
-      flavor: String(item.flavor || '').trim(),
-      species: String(item.species || '').trim(),
-      lifestage: String(item.lifestage || '').trim(),
-      ingredients: String(item.ingredients || '').trim()
+      upc: String(item.upc || ''),
+      brand: String(item.brand || ''),
+      productName: String(item.productName || ''),
+      flavor: String(item.flavor || ''),
+      species: String(item.species || ''),
+      lifestage: String(item.lifestage || ''),
+      ingredients: String(item.ingredients || '')
     };
   }
 
-  function renderReview() {
-    const item = state.item || {};
+  function renderReview(){
+    const i = state.item || {};
     $('#revExp').value = state.exp || '';
-    $('#revSpecies').value = item.species || 'Dog';
-    $('#revStage').value = item.lifestage || 'Adult';
-    $('#revBrand').value = item.brand || '';
-    $('#revName').value = item.productName || '';
-    $('#revFlavor').value = item.flavor || '';
-    $('#revIngredients').value = item.ingredients || '';
-    $('#revTreatFood').value = item.type || '';
+    $('#revSpecies').value = i.species || 'Dog';
+    $('#revStage').value = i.lifestage || 'Adult';
+    $('#revBrand').value = i.brand || '';
+    $('#revName').value = i.productName || '';
+    $('#revFlavor').value = i.flavor || '';
+    $('#revIngredients').value = i.ingredients || '';
+    $('#revTreatFood').value = i.type || '';
   }
 
-  function wireNewItem() {
-    state.photos = state.photos || {};
-
-    const frontBtn = $('#frontBtn');
-    const frontPreview = $('#frontPreview');
-    const ingBtn = $('#ingredientsBtn');
-    const ingPreview = $('#ingredientsPreview');
-    const ingBlock = $('#ingredientsBlock');
-    const nextBtn = $('#photoContinue');
+  function wireNewItem(){
     const msg = $('#newStatus');
-    const spinnerEl = $('#newLoad');
+    const spin = $('#newLoad');
+    const next = $('#photoContinue');
     const actions = $('#photoActions');
+    const ingBlock = $('#ingredientsBlock');
 
-    function stopStream(stream) {
-      if (stream) stream.getTracks().forEach(track => track.stop());
-    }
-
-    function checkNextReady() {
-      const hasFront = !!state.photos.front;
-      const hasIng = !!state.photos.ingredients;
-      console.log('[checkNextReady]', { hasFront, hasIng, state });
-      if (hasFront && hasIng) {
-        actions?.classList.remove('hidden'); // ✅ Show Continue button block
-      }
-    }
-
-    function launchCamera({ onCapture, focus = false }) {
-      const overlay = document.createElement('div');
-      overlay.className = 'camera-overlay';
-      overlay.innerHTML = `
-        <video autoplay playsinline></video>
-        <button class="btn take">Take Photo</button>
-        <button class="btn secondary cancel">Cancel</button>
-      `;
-      document.body.appendChild(overlay);
-
-      const video = overlay.querySelector('video');
-      const takeBtn = overlay.querySelector('.take');
-      const cancelBtn = overlay.querySelector('.cancel');
-
-      navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          ...(focus ? { focusMode: 'manual' } : {})
-        }
-      }).then(stream => {
-        video.srcObject = stream;
-
-        takeBtn.onclick = () => {
-          const canvas = document.createElement('canvas');
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg');
-
-          stopStream(stream);
-          overlay.remove();
-
-          if (!dataUrl || !dataUrl.startsWith('data:image/jpeg')) {
-            console.error('[Camera Capture] Invalid or empty data URL:', dataUrl);
-            setMsg(msg, 'Failed to capture image. Please try again.', 'error');
-            return;
-          }
-
-          console.log('[Camera Capture] Got image:', dataUrl.substring(0, 50));
-          if (onCapture) onCapture(dataUrl);
-        };
-
-        cancelBtn.onclick = () => {
-          stopStream(stream);
-          overlay.remove();
-        };
-      }).catch(err => {
-        console.error('Camera error', err);
-        setMsg(msg, 'Camera not available', 'error');
-      });
-    }
-
-    frontBtn?.addEventListener('click', () => {
-      launchCamera({
-        onCapture: dataUrl => {
-          console.log('[front photo taken]', dataUrl.substring(0, 50));
-          state.photos.front = dataUrl;
-          frontPreview.src = dataUrl;
-          frontPreview.classList.remove('hidden');
-
-          ingBlock?.classList.remove('hidden');
-          setMsg(msg, 'Processing front photo…', 'success');
-          spinner(true, spinnerEl);
-
-          setTimeout(() => {
-            setMsg(msg, '');
-            spinner(false, spinnerEl);
-          }, 1000);
-
-          checkNextReady();
-        }
+    $('#frontBtn')?.addEventListener('click', () => {
+      captureImage(dataUrl => {
+        state.photos.front = dataUrl;
+        $('#frontPreview').src = dataUrl;
+        $('#frontPreview').classList.remove('hidden');
+        ingBlock?.classList.remove('hidden');
+        checkReady();
       });
     });
 
-    ingBtn?.addEventListener('click', () => {
-      launchCamera({
-        focus: true,
-        onCapture: dataUrl => {
-          console.log('[ingredients photo taken]', dataUrl.substring(0, 50));
-          state.photos.ingredients = dataUrl;
-          ingPreview.src = dataUrl;
-          ingPreview.classList.remove('hidden');
-
-          setMsg(msg, 'Processing ingredients photo…', 'success');
-          spinner(true, spinnerEl);
-
-          setTimeout(() => {
-            setMsg(msg, '');
-            spinner(false, spinnerEl);
-          }, 1000);
-
-          checkNextReady();
-        }
+    $('#ingredientsBtn')?.addEventListener('click', () => {
+      captureImage(dataUrl => {
+        state.photos.ingredients = dataUrl;
+        $('#ingredientsPreview').src = dataUrl;
+        $('#ingredientsPreview').classList.remove('hidden');
+        checkReady();
       });
     });
 
-    nextBtn?.addEventListener('click', async () => {
-      console.log('[nextBtn clicked]');
-      console.log('[photo lengths]', {
-        front: state.photos.front?.length,
-        ingredients: state.photos.ingredients?.length
-      });
+    next?.addEventListener('click', async () => {
+      const front = state.photos.front;
+      const ing = state.photos.ingredients;
+      console.log('[AI EXTRACT] Front:', front?.substring(0, 50));
+      console.log('[AI EXTRACT] Ingredients:', ing?.substring(0, 50));
 
-      if (!state.photos.front || !state.photos.ingredients) {
-        console.warn('[nextBtn] Missing one or both photos', state.photos);
-        setMsg(msg, 'Missing one or both images. Please retake.', 'error');
+      if (!front || !ing || front.length < 100 || ing.length < 100) {
+        setMsg(msg, 'Missing or invalid image(s).', 'error');
         return;
       }
 
-      console.log('[DEBUG] Photos before extract', {
-        frontStart: state.photos.front?.substring(0, 50),
-        ingStart: state.photos.ingredients?.substring(0, 50)
-      });
-
       setMsg(msg, 'Extracting label data…', 'success');
-      spinner(true, spinnerEl);
+      spinner(true, spin);
 
       try {
         const extracted = await API.extract({
           upc: state.upc,
-          frontDataUrl: state.photos.front,
-          ingDataUrl: state.photos.ingredients
+          frontDataUrl: front,
+          ingDataUrl: ing
         });
 
-        console.log('[AI extract result]', extracted);
+        console.log('[EXTRACT RESULT]', extracted);
 
-        state.item = normalizeItemFromSheet({
-          upc: state.upc,
-          ...extracted
-        });
-
+        state.item = normalizeItem({ upc: state.upc, ...extracted });
         navigate('screenReview');
         setTimeout(renderReview, 0);
       } catch (err) {
         console.error('[extract error]', err);
-        setMsg(msg, 'AI extraction failed. Please try again.', 'error');
+        setMsg(msg, 'AI extraction failed.', 'error');
       } finally {
-        spinner(false, spinnerEl);
+        spinner(false, spin);
       }
+    });
+
+    function checkReady(){
+      if (state.photos.front && state.photos.ingredients) {
+        actions?.classList.remove('hidden');
+      }
+    }
+  }
+
+  function captureImage(callback){
+    const overlay = document.createElement('div');
+    overlay.className = 'camera-overlay';
+    overlay.innerHTML = `
+      <video autoplay playsinline></video>
+      <button class="btn take">Take Photo</button>
+      <button class="btn secondary cancel">Cancel</button>
+    `;
+    document.body.appendChild(overlay);
+
+    const video = overlay.querySelector('video');
+    const take = overlay.querySelector('.take');
+    const cancel = overlay.querySelector('.cancel');
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
+      video.srcObject = stream;
+
+      take.onclick = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const url = canvas.toDataURL('image/jpeg');
+        stream.getTracks().forEach(track => track.stop());
+        overlay.remove();
+        callback(url);
+      };
+
+      cancel.onclick = () => {
+        stream.getTracks().forEach(track => track.stop());
+        overlay.remove();
+      };
+    }).catch(err => {
+      console.error('[camera error]', err);
+      setMsg($('#newStatus'), 'Camera not available', 'error');
     });
   }
 
