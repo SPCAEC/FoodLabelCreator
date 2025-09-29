@@ -185,71 +185,69 @@
     const ingBtn = $('#ingredientsBtn');
     const ingPreview = $('#ingredientsPreview');
     const ingBlock = $('#ingredientsBlock');
-    const nextBtn = $('#nextToIngredients');
+    const nextBtn = $('#photoContinue');
     const msg = $('#newStatus');
     const spinnerEl = $('#newLoad');
+    const actions = $('#photoActions');
 
     function stopStream(stream) {
       if (stream) stream.getTracks().forEach(track => track.stop());
     }
 
-    function launchCamera({ onCapture, constraints = {} }) {
-      const overlay = document.createElement('div');
-      overlay.className = 'camera-overlay camera';
+    function checkNextReady() {
+      const hasFront = !!state.photos.front;
+      const hasIng = !!state.photos.ingredients;
+      if (hasFront && hasIng) {
+        actions?.classList.remove('hidden'); // ✅ Show Continue button block
+      }
+    }
 
+    function launchCamera({ onCapture, focus = false }) {
+      const overlay = document.createElement('div');
+      overlay.className = 'camera-overlay';
       overlay.innerHTML = `
         <video autoplay playsinline></video>
         <button class="btn take">Take Photo</button>
         <button class="btn secondary cancel">Cancel</button>
       `;
-
       document.body.appendChild(overlay);
+
       const video = overlay.querySelector('video');
       const takeBtn = overlay.querySelector('.take');
       const cancelBtn = overlay.querySelector('.cancel');
 
-      const fullConstraints = {
+      navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'environment',
-          ...constraints
+          ...(focus ? { focusMode: 'manual' } : {})
         }
-      };
+      }).then(stream => {
+        video.srcObject = stream;
 
-      navigator.mediaDevices.getUserMedia(fullConstraints)
-        .then(stream => {
-          video.srcObject = stream;
+        takeBtn.onclick = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          const dataUrl = canvas.toDataURL('image/jpeg');
 
-          takeBtn.onclick = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg');
+          stopStream(stream);
+          overlay.remove();
+          if (onCapture) onCapture(dataUrl);
+        };
 
-            stopStream(stream);
-            overlay.remove();
-            if (onCapture) onCapture(dataUrl);
-          };
-
-          cancelBtn.onclick = () => {
-            stopStream(stream);
-            overlay.remove();
-          };
-
-          // 👇 Auto-scroll to camera
-          setTimeout(() => {
-            overlay.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }, 300);
-        })
-        .catch(err => {
-          console.error('Camera error', err);
-          setMsg(msg, 'Camera not available', 'error');
-        });
+        cancelBtn.onclick = () => {
+          stopStream(stream);
+          overlay.remove();
+        };
+      }).catch(err => {
+        console.error('Camera error', err);
+        setMsg(msg, 'Camera not available', 'error');
+      });
     }
 
     frontBtn?.addEventListener('click', () => {
-      frontBtn.classList.add('hidden');
       launchCamera({
         onCapture: dataUrl => {
           frontPreview.src = dataUrl;
@@ -271,11 +269,8 @@
     });
 
     ingBtn?.addEventListener('click', () => {
-      ingBtn.classList.add('hidden');
       launchCamera({
-        constraints: {
-          focusMode: 'continuous' // 🔍 Enable autofocus if supported
-        },
+        focus: true, // ✅ Apply focus enhancement for ingredients photo
         onCapture: dataUrl => {
           ingPreview.src = dataUrl;
           ingPreview.classList.remove('hidden');
@@ -294,12 +289,6 @@
       });
     });
 
-    function checkNextReady() {
-      if (state.photos.front && state.photos.ingredients) {
-        nextBtn?.classList.remove('hidden');
-      }
-    }
-
     nextBtn?.addEventListener('click', async () => {
       if (!state.photos.front || !state.photos.ingredients) return;
 
@@ -313,7 +302,11 @@
           ingDataUrl: state.photos.ingredients
         });
 
-        state.item = normalizeItemFromSheet({ upc: state.upc, ...extracted });
+        state.item = normalizeItemFromSheet({
+          upc: state.upc,
+          ...extracted
+        });
+
         navigate('screenReview');
         setTimeout(renderReview, 0);
       } catch (err) {
