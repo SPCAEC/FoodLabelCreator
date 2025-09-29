@@ -4,7 +4,7 @@
 
     <!-- Start Over button in top right -->
     <div style="position: absolute; top: 16px; right: 16px; z-index: 10;">
-      <button id="startoverBtn" class="btn startover">Start Over</button>
+      <button id="startoverBtn" class="btn startOver" type="button">Start Over</button>
     </div>
 
     <div class="photo-grid">
@@ -12,20 +12,20 @@
       <div class="photo-block">
         <label><strong>Step 1:</strong> Full front of the bag/box/can</label>
         <img id="frontPreview" class="preview hidden" alt="Front photo preview">
-        <button id="frontBtn" class="btn">Take Front Photo</button>
+        <button id="frontBtn" class="btn" type="button">Take Front Photo</button>
       </div>
 
       <!-- Step 2: Ingredients (initially hidden) -->
       <div id="ingredientsBlock" class="photo-block hidden">
         <label><strong>Step 2:</strong> Ingredients label (flat, good lighting)</label>
         <img id="ingredientsPreview" class="preview hidden" alt="Ingredients photo preview">
-        <button id="ingredientsBtn" class="btn">Take Ingredients Photo</button>
+        <button id="ingredientsBtn" class="btn" type="button">Take Ingredients Photo</button>
       </div>
     </div>
 
     <!-- Action Buttons (initially hidden until both photos taken) -->
     <div id="photoActions" class="actions hidden">
-      <button id="photoContinue" class="btn">Continue</button>
+      <button id="photoContinue" class="btn" type="button">Continue</button>
     </div>
   </div>
 </section>

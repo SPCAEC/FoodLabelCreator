@@ -1,9 +1,10 @@
 <script>
 /**
- * App controller (rewritten cleanly)
- * - Launches scanner, looks up UPC
- * - Navigates user through label creation flow
- * - Works with backend API via google.script.run (API.*)
+ * App controller (clean, fixed)
+ * - Scans UPCs or looks up manually
+ * - Captures front and ingredient photos
+ * - Auto-focuses ingredients photo
+ * - Scrolls camera preview to top
  */
 
 (function(){
@@ -169,7 +170,6 @@
   function renderReview() {
     const item = state.item || {};
     $('#revExp').value = state.exp || '';
-
     $('#revSpecies').value = item.species || 'Dog';
     $('#revStage').value = item.lifestage || 'Adult';
     $('#revBrand').value = item.brand || '';
@@ -177,13 +177,13 @@
     $('#revFlavor').value = item.flavor || '';
     $('#revIngredients').value = item.ingredients || '';
     $('#revTreatFood').value = item.type || '';
-    }
+  }
 
   function wireNewItem() {
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
-    const ingBtn = $('#ingBtn');
-    const ingPreview = $('#ingPreview');
+    const ingBtn = $('#ingredientsBtn');
+    const ingPreview = $('#ingredientsPreview');
     const ingBlock = $('#ingredientsBlock');
     const nextBtn = $('#nextToIngredients');
     const msg = $('#newStatus');
@@ -191,16 +191,11 @@
 
     function stopStream(stream) {
       if (stream) stream.getTracks().forEach(track => track.stop());
-
-      // 👇 Reveal Step 2 *only after* front photo
-      if (state.photos.front && !state.photos.ingredients) {
-        document.querySelector('#ingredientsBlock')?.classList.remove('hidden');
-      }
     }
 
-    function launchCamera({ onCapture }) {
+    function launchCamera({ onCapture, constraints = {} }) {
       const overlay = document.createElement('div');
-      overlay.className = 'camera-overlay';
+      overlay.className = 'camera-overlay camera';
 
       overlay.innerHTML = `
         <video autoplay playsinline></video>
@@ -213,7 +208,14 @@
       const takeBtn = overlay.querySelector('.take');
       const cancelBtn = overlay.querySelector('.cancel');
 
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      const fullConstraints = {
+        video: {
+          facingMode: 'environment',
+          ...constraints
+        }
+      };
+
+      navigator.mediaDevices.getUserMedia(fullConstraints)
         .then(stream => {
           video.srcObject = stream;
 
@@ -227,7 +229,6 @@
 
             stopStream(stream);
             overlay.remove();
-
             if (onCapture) onCapture(dataUrl);
           };
 
@@ -235,6 +236,11 @@
             stopStream(stream);
             overlay.remove();
           };
+
+          // 👇 Auto-scroll to camera
+          setTimeout(() => {
+            overlay.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 300);
         })
         .catch(err => {
           console.error('Camera error', err);
@@ -243,6 +249,7 @@
     }
 
     frontBtn?.addEventListener('click', () => {
+      frontBtn.classList.add('hidden');
       launchCamera({
         onCapture: dataUrl => {
           frontPreview.src = dataUrl;
@@ -264,7 +271,11 @@
     });
 
     ingBtn?.addEventListener('click', () => {
+      ingBtn.classList.add('hidden');
       launchCamera({
+        constraints: {
+          focusMode: 'continuous' // 🔍 Enable autofocus if supported
+        },
         onCapture: dataUrl => {
           ingPreview.src = dataUrl;
           ingPreview.classList.remove('hidden');
@@ -284,76 +295,41 @@
     });
 
     function checkNextReady() {
-      const hasFront = !!state.photos.front;
-      const hasIng = !!state.photos.ingredients;
-      if (hasFront && hasIng) {
+      if (state.photos.front && state.photos.ingredients) {
         nextBtn?.classList.remove('hidden');
       }
     }
 
     nextBtn?.addEventListener('click', async () => {
-    if (!state.photos.front || !state.photos.ingredients) return;
+      if (!state.photos.front || !state.photos.ingredients) return;
 
-    setMsg(msg, 'Extracting label data…', 'success');
-    spinner(true, spinnerEl);
+      setMsg(msg, 'Extracting label data…', 'success');
+      spinner(true, spinnerEl);
 
-    try {
-      const extracted = await API.extract({
-        upc: state.upc,
-        frontDataUrl: state.photos.front,
-        ingDataUrl: state.photos.ingredients
-      });
+      try {
+        const extracted = await API.extract({
+          upc: state.upc,
+          frontDataUrl: state.photos.front,
+          ingDataUrl: state.photos.ingredients
+        });
 
-      state.item = normalizeItemFromSheet({
-        upc: state.upc,
-        ...extracted
-      });
-
-      navigate('screenReview');
-      setTimeout(renderReview, 0);
-    } catch (err) {
-      console.error('[extract error]', err);
-      setMsg(msg, 'AI extraction failed. Please try again.', 'error');
-    } finally {
-      spinner(false, spinnerEl);
-    }
+        state.item = normalizeItemFromSheet({ upc: state.upc, ...extracted });
+        navigate('screenReview');
+        setTimeout(renderReview, 0);
+      } catch (err) {
+        console.error('[extract error]', err);
+        setMsg(msg, 'AI extraction failed. Please try again.', 'error');
+      } finally {
+        spinner(false, spinnerEl);
+      }
     });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
     wireGlobal();
     wireLaunch();
-    wireNewItem(); // ← required for photo capture
+    wireNewItem();
     navigate('screenLaunch');
-
-    // 👇 New: wire up front photo button behavior
-    const frontBtn = document.querySelector('#frontBtn');
-    const ingredientsBlock = document.querySelector('#ingredientsBlock');
-
-    frontBtn.addEventListener('click', async () => {
-      frontBtn.classList.add('hidden'); // 🔒 hide front button
-      ingredientsBlock?.classList.add('hidden'); // 🔒 hide Step 2
-      launchCamera({
-        onCapture: dataUrl => {
-          // handle captured photo
-          frontPreview.src = dataUrl;
-          frontPreview.classList.remove('hidden');
-          state.photos.front = dataUrl;
-
-          setMsg(msg, 'Processing front photo…', 'success');
-          spinner(true, spinnerEl);
-
-          setTimeout(() => {
-            setMsg(msg, '');
-            spinner(false, spinnerEl);
-          }, 1000);
-
-          // now reveal step 2
-          ingredientsBlock?.classList.remove('hidden');
-          checkNextReady();
-        }
-      });
-    });
   });
 })();
 </script>
