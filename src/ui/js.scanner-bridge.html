@@ -1,99 +1,99 @@
 <script>
 /**
- * MiniScanner: Barcode scanner using native BarcodeDetector with live camera preview.
- * Mounts into #scannerMount and shows #scannerSection.
+ * MiniScanner - Chrome native BarcodeDetector-based scanner
+ * - Shows preview in #scannerMount
+ * - Dispatches 'upc-scanned' event on detection
+ * - Gracefully cleans up video + stream on cancel
  */
+
 window.MiniScanner = (() => {
-  const section = document.getElementById('scannerSection');
   const mount = document.getElementById('scannerMount');
-  let stream = null;
-  let running = false;
-  let rafId = null;
+  const section = document.getElementById('scannerSection');
+  const stopBtn = document.getElementById('stopScanBtn');
+
   let video = null;
+  let stream = null;
   let detector = null;
+  let running = false;
 
-  async function open(){
+  async function open() {
     if (!('BarcodeDetector' in window)) {
-      alert('Barcode scanning not supported on this device.');
+      alert('Barcode scanning is not supported on this device.');
       return;
     }
 
-    try {
-      detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'] });
-    } catch (err) {
-      console.error('BarcodeDetector init failed:', err);
-      alert('Barcode scanning not supported.');
-      return;
-    }
-
-    if (!section || !mount) return;
+    // Setup UI
+    section.classList.remove('hidden');
+    section.removeAttribute('aria-hidden');
     mount.innerHTML = '';
-
     video = document.createElement('video');
     video.setAttribute('autoplay', '');
     video.setAttribute('playsinline', '');
-    video.style.width = '100%';
-    video.style.maxHeight = '60vh';
-    video.style.borderRadius = '16px';
-
+    video.className = 'preview';
     mount.appendChild(video);
-    section.classList.remove('hidden');
-    section.removeAttribute('aria-hidden');
 
+    // Get camera
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       video.srcObject = stream;
-
-      await video.play();
-      running = true;
-      requestScan();
     } catch (err) {
-      console.error('Camera access failed:', err);
-      alert('Camera access was denied or failed.');
-    }
-  }
-
-  function requestScan(){
-    if (!running || !video || video.readyState < 2) {
-      rafId = requestAnimationFrame(requestScan);
+      console.error('Camera access failed', err);
+      alert('Unable to access camera.');
       return;
     }
 
-    detector.detect(video).then(codes => {
-      const code = codes?.[0]?.rawValue || '';
-      if (code) {
-        close();
-        const event = new CustomEvent('upc-scanned', { detail: { upc: code } });
-        window.dispatchEvent(event);
-      } else {
-        rafId = requestAnimationFrame(requestScan);
-      }
-    }).catch(err => {
-      console.warn('Scan error:', err);
-      rafId = requestAnimationFrame(requestScan);
-    });
+    detector = new BarcodeDetector({ formats: ['ean_13', 'upc_a'] });
+    running = true;
+
+    requestAnimationFrame(tick);
   }
 
-  function close(){
+  async function tick() {
+    if (!running || !video || video.readyState < 2) {
+      requestAnimationFrame(tick);
+      return;
+    }
+
+    try {
+      const barcodes = await detector.detect(video);
+      if (barcodes.length > 0) {
+        const code = normalize(barcodes[0].rawValue);
+        if (code) {
+          close();
+          window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc: code } }));
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Barcode detection error', err);
+    }
+
+    requestAnimationFrame(tick);
+  }
+
+  function normalize(raw) {
+    let s = String(raw || '').replace(/\D/g, '');
+    if (s.length === 13 && s[0] === '0') s = s.slice(1);
+    if (s.length > 0 && s.length < 12) s = s.padStart(12, '0');
+    return s.length === 12 ? s : '';
+  }
+
+  function close() {
     running = false;
-    if (rafId) cancelAnimationFrame(rafId);
-    if (video) {
-      video.pause();
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
-      }
-      video.remove();
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
     }
-
-    if (section) {
-      section.classList.add('hidden');
-      section.setAttribute('aria-hidden', 'true');
+    if (video && video.srcObject) {
+      video.srcObject = null;
     }
-
-    const evt = new CustomEvent('upc-scan-canceled');
-    window.dispatchEvent(evt);
+    mount.innerHTML = '';
+    section.classList.add('hidden');
+    section.setAttribute('aria-hidden', 'true');
+    window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
   }
+
+  stopBtn?.addEventListener('click', close);
 
   return { open, close };
 })();
