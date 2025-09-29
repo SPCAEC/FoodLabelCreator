@@ -221,10 +221,11 @@
           throw new Error('AI extract failed');
         }
 
+        // ✅ Safely assign result to state.item
         if (extracted.data && typeof extracted.data === 'object') {
           Object.assign(state.item, extracted.data);
         } else {
-          console.warn('[EXTRACT WARNING] No usable data returned from AI.');
+          console.warn('[EXTRACT WARNING] No usable data returned from AI:', extracted);
         }
 
         navigate('screenReview');
