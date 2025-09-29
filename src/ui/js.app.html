@@ -154,6 +154,18 @@
     setMsg($('#launchInfo'), 'Scanner closed.');
   });
 
+  function normalizeItemFromSheet(item) {
+    return {
+      upc: String(item.upc || '').trim(),
+      brand: String(item.brand || '').trim(),
+      productName: String(item.productName || '').trim(),
+      flavor: String(item.flavor || '').trim(),
+      species: String(item.species || '').trim(),
+      lifestage: String(item.lifestage || '').trim(),
+      ingredients: String(item.ingredients || '').trim()
+    };
+  }
+  
   function wireNewItem() {
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
