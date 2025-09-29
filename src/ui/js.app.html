@@ -223,20 +223,20 @@
 
         // ✅ Safely assign result to state.item
         if (extracted.data && typeof extracted.data === 'object') {
-          Object.assign(state.item, extracted.data);
+          state.item = normalizeItem({
+            upc: state.upc,
+            ...extracted.data
+          });
         } else {
           console.warn('[EXTRACT WARNING] No usable data returned from AI:', extracted);
+          setMsg(msg, 'AI returned no usable data.', 'error');
+          return;
         }
 
+        console.log('[DEBUG] Rendering review screen:', state.item);
         navigate('screenReview');
         renderReview();
 
-        state.item = normalizeItem({ upc: state.upc, ...extracted });
-        navigate('screenReview');
-        setTimeout(() => {
-          console.log('[DEBUG] Rendering review screen:', state.item);
-          renderReview();
-        }, 100); // Give DOM a beat to update
       } catch (err) {
         console.error('[extract error]', err);
         setMsg(msg, 'AI extraction failed.', 'error');
