@@ -72,21 +72,32 @@ function apiCreateLabels(payload) {
     const upc = normalizeUPC_(payload.upc);
     if (!upc) throw new Error('Invalid UPC');
 
-    const record = payload.sheetRecord || {
+    // Normalize the full record regardless of casing
+    const record = {
       UPC: upc,
-      Species:       payload.species      || payload.Species      || '',
-      Lifestage:     payload.lifestage    || payload.Lifestage    || 'Adult',
-      Brand:         payload.brand        || payload.Brand        || '',
-      ProductName:   payload.productName  || payload.ProductName  || '',
-      'Recipe/Flavor': payload.flavor     || payload.Flavor       || '',
-      'Treat/Food':  payload.type         || payload['Treat/Food']|| 'Food',
-      Ingredients:   payload.ingredients  || payload.Ingredients  || ''
+      Species:        payload.species        || payload.Species        || '',
+      Lifestage:      payload.lifestage      || payload.Lifestage      || 'Adult',
+      Brand:          payload.brand          || payload.Brand          || '',
+      ProductName:    payload.productName    || payload.ProductName    || '',
+      'Recipe/Flavor':payload.flavor         || payload.Flavor         || '',
+      'Treat/Food':   payload.type           || payload['Treat/Food']  || 'Food',
+      Ingredients:    payload.ingredients    || payload.Ingredients    || ''
     };
 
+    console.log('[SHEET RECORD]', record);
+
+    // Generate the label file
     const pdf = generateLabelPDF_(payload);
+
+    // Write row to sheet
     const row = upsertRecord({ ...record, pdfFileId: pdf.fileId, pdfUrl: pdf.url });
 
-    return { pdfUrl: pdf.url, fileId: pdf.fileId, row };
+    // Return PDF link and row result
+    return {
+      pdfUrl: pdf.url,
+      fileId: pdf.fileId,
+      row
+    };
   });
 }
 

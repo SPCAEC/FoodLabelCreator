@@ -165,7 +165,7 @@
     $('#revName').value = i.productName || '';
     $('#revFlavor').value = i.flavor || '';
     $('#revIngredients').value = i.ingredients || '';
-    $('#revTreatFood').value = i.type || '';
+    $('#revTreatFood').value = i.type || 'Food';
   }
 
   function wireNewItem(){
@@ -209,7 +209,6 @@
       spinner(true, spin);
 
       try {
-        
         const extracted = await API.extract({
           frontDataUrl: state.photos.front,
           ingDataUrl: state.photos.ingredients
@@ -221,7 +220,6 @@
           throw new Error('AI extract failed');
         }
 
-        // ✅ Safely assign result to state.item
         if (extracted.data && typeof extracted.data === 'object') {
           state.item = normalizeItem({
             upc: state.upc,
@@ -274,7 +272,6 @@
       const type = typeSelect.value;
       if (!exp || !type) return;
 
-      // Merge values into state
       Object.assign(state.item, {
         species: $('#revSpecies').value,
         lifestage: $('#revStage').value,
@@ -303,7 +300,19 @@
 
         state.pdf = { url: res.pdfUrl, id: res.fileId };
         setMsg(status, 'Label created successfully!', 'success');
+
+        // ✅ Update PDF link in UI
+        const link = $('#pdfLink');
+        const block = $('#pdfLinkBlock');
+        if (link && block) {
+          link.href = res.pdfUrl;
+          link.textContent = 'View Label PDF';
+          block.classList.remove('hidden');
+        }
+
+        // ✅ Open in new tab immediately
         window.open(res.pdfUrl, '_blank');
+
       } catch (err) {
         console.error('[create label error]', err);
         setMsg(status, 'Failed to create label.', 'error');

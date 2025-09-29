@@ -52,7 +52,7 @@
       <div class="field">
         <label for="revTreatFood">Is this Food or a Treat?</label>
         <select id="revTreatFood">
-          <option value="" selected>— Select —</option>
+          <!-- ✅ Default Food -->
           <option>Food</option>
           <option>Treat</option>
         </select>
@@ -63,6 +63,11 @@
     <div class="actions">
       <button id="revSave" class="btn" disabled>Save and Create Label</button>
       <button class="btn startover startOver" type="button">Start Over</button>
+    </div>
+
+    <!-- ✅ PDF link block (hidden by default) -->
+    <div id="pdfLinkBlock" class="hidden" style="margin-top: 1rem;">
+      <a id="pdfLink" href="#" target="_blank" class="btn secondary">View Label PDF</a>
     </div>
 
     <!-- Status + spinner -->
