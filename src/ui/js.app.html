@@ -156,6 +156,7 @@
   }
 
   function renderReview(){
+    console.log('[renderReview] Called with:', state.item);
     const i = state.item || {};
     $('#revExp').value = state.exp || '';
     $('#revSpecies').value = i.species || 'Dog';
@@ -222,7 +223,10 @@
 
         state.item = normalizeItem({ upc: state.upc, ...extracted });
         navigate('screenReview');
-        setTimeout(renderReview, 0);
+        setTimeout(() => {
+          console.log('[DEBUG] Rendering review screen:', state.item);
+          renderReview();
+        }, 100); // Give DOM a beat to update
       } catch (err) {
         console.error('[extract error]', err);
         setMsg(msg, 'AI extraction failed.', 'error');
