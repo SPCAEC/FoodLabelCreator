@@ -1,137 +1,95 @@
 <script>
-window.MiniScanner = (() => {
-  let videoStream = null;
-  let videoEl = null;
-  let running = false;
-  let mount = null;
+/**
+ * Scanner Bridge — emits events to window
+ * - For native BarcodeDetector
+ * - With preview + cancel support
+ */
 
-  function ensureMount() {
-    mount = document.getElementById('scannerMount');
-    if (!mount) {
-      mount = document.createElement('div');
-      mount.id = 'scannerMount';
-      mount.style.cssText = `
-        position: fixed;
-        inset: 0;
-        background: rgba(0,0,0,0.85);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-direction: column;
-        padding: 1rem;
-      `;
-      document.body.appendChild(mount);
-    }
-  }
-
-  function createCancelButton() {
-    const cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.className = 'btn secondary';
-    cancelBtn.style.cssText = `
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      font-size: 16px;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      z-index: 10000;
-    `;
-    cancelBtn.addEventListener('click', () => {
-      stop();
-      window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
-    });
-    return cancelBtn;
-  }
+window.MiniScanner = (function(){
+  let stream = null;
+  let video = null;
+  let active = false;
+  let detector = null;
+  let rafId = null;
 
   async function open(){
     if (!('BarcodeDetector' in window)) {
-      alert('Barcode scanning is not supported on this device or browser.\nPlease enter the UPC manually.');
+      console.warn('BarcodeDetector not supported');
+      alert('Barcode scanner not supported in this browser.');
       return;
     }
 
     try {
-      const detector = new BarcodeDetector({ formats: ['ean_13'] });
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-
-      ensureMount();
-
-      videoEl = document.createElement('video');
-      videoEl.setAttribute('autoplay', '');
-      videoEl.setAttribute('playsinline', '');
-      videoEl.style.cssText = `
-        width: 100%;
-        height: auto;
-        max-height: 80%;
-        border-radius: 16px;
-        box-shadow: 0 0 20px #000;
-        opacity: 0;
-        transition: opacity 0.4s ease-in-out;
-      `;
-
-      mount.innerHTML = ''; // clear previous contents
-      mount.appendChild(videoEl);
-      mount.appendChild(createCancelButton());
-
-      videoEl.srcObject = stream;
-      videoStream = stream;
-      await videoEl.play();
-      await new Promise(r => setTimeout(r, 200)); // Let camera warm up
-
-      // Fade in the preview
-      requestAnimationFrame(() => {
-        videoEl.style.opacity = 1;
-      });
-
-      running = true;
-      detectLoop(detector);
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
     } catch (err) {
-      console.error('[MiniScanner.open] error:', err);
-      alert('Unable to access the camera for barcode scanning.');
-      window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
-    }
-  }
-
-  async function detectLoop(detector){
-    while (running) {
-      try {
-        const barcodes = await detector.detect(videoEl);
-        if (barcodes.length > 0) {
-          const code = barcodes[0]?.rawValue?.trim() || '';
-          if (/^\d{12}$/.test(code)) {
-            stop();
-            window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc: code } }));
-            return;
-          }
-        }
-        await new Promise(r => setTimeout(r, 300));
-      } catch (err) {
-        console.warn('[MiniScanner.detectLoop] error:', err);
-        break;
-      }
+      console.error('Camera error:', err);
+      alert('Camera access is required to scan.');
+      return;
     }
 
-    stop();
-    window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
+    if (!video) {
+      video = document.createElement('video');
+      video.setAttribute('autoplay', true);
+      video.setAttribute('muted', true);
+      video.setAttribute('playsinline', true);
+      video.style.width = '100%';
+      video.style.maxHeight = '60vh';
+      video.style.borderRadius = '16px';
+    }
+
+    video.srcObject = stream;
+
+    const mount = document.getElementById('scannerMount');
+    if (!mount) throw new Error('scannerMount not found');
+    mount.innerHTML = '';
+    mount.appendChild(video);
+
+    const section = document.getElementById('scannerSection');
+    if (section) section.classList.remove('hidden');
+
+    if (!detector) detector = new BarcodeDetector({ formats: ['ean_13', 'upc_a'] });
+    active = true;
+
+    video.onloadedmetadata = () => {
+      video.play();
+      detectLoop();
+    };
   }
 
   function stop(){
-    running = false;
-    if (videoStream) {
-      videoStream.getTracks().forEach(t => t.stop());
-      videoStream = null;
+    active = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      stream = null;
     }
-    if (videoEl) {
-      videoEl.pause();
-      videoEl.srcObject = null;
+    if (video) video.pause();
+    const section = document.getElementById('scannerSection');
+    if (section) section.classList.add('hidden');
+    const mount = document.getElementById('scannerMount');
+    if (mount) mount.innerHTML = '';
+    window.dispatchEvent(new CustomEvent('upc-scan-canceled'));
+  }
+
+  async function detectLoop(){
+    if (!active || !video || video.readyState < 2) {
+      rafId = requestAnimationFrame(detectLoop);
+      return;
     }
-    if (mount) {
-      mount.innerHTML = '';
-      mount.remove();
-      mount = null;
+
+    try {
+      const results = await detector.detect(video);
+      if (results.length) {
+        const upc = results[0].rawValue;
+        stop();
+        window.dispatchEvent(new CustomEvent('upc-scanned', { detail: { upc } }));
+        return;
+      }
+    } catch (err) {
+      console.error('Detection error:', err);
     }
-    videoEl = null;
+
+    rafId = requestAnimationFrame(detectLoop);
   }
 
   return { open, stop };
