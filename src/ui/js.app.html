@@ -213,7 +213,10 @@
         console.log('[DEBUG] Front Image Snippet:', (state.photos.front || '').slice(0, 100));
         console.log('[DEBUG] Ingredients Image Snippet:', (state.photos.ingredients || '').slice(0, 100));
         
-        const extracted = await API.extract(state.photos.front, state.photos.ingredients);
+        const extracted = await API.extract({
+          frontDataUrl: state.photos.front,
+          ingDataUrl: state.photos.ingredients
+        });
 
         console.log('[EXTRACT RESULT]', extracted);
 

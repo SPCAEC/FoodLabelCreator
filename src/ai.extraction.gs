@@ -23,7 +23,7 @@ function aiExtract_(req) {
     images.push({ type: 'image_url', image_url: { url: ingredients } });
     }
     if (!front || !ingredients) {
-      return { ok: false, message: 'Missing image data' };
+      throw new Error(`Missing image data. Front: ${!!front}, Ingredients: ${!!ingredients}`);
     }
   
   console.log('[Image Data Lengths]', {
