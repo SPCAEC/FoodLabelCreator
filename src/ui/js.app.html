@@ -155,49 +155,34 @@
   });
 
   function wireNewItem(){
-    const frontInput = $('#frontInput');
     const frontBtn = $('#frontBtn');
     const frontPreview = $('#frontPreview');
-    const ingInput = $('#ingInput');
     const ingBtn = $('#ingBtn');
     const ingPreview = $('#ingPreview');
     const nextBtn = $('#nextToIngredients');
+    const ingredientsBlock = $('#ingredientsBlock');
 
-    frontBtn?.addEventListener('click', () => {
-      frontInput?.click();
+    let frontStream, ingStream;
+
+    frontBtn?.addEventListener('click', async () => {
+      if (frontStream) stopStream(frontStream);
+      frontStream = await openCameraWithPreview(frontPreview, async (dataUrl) => {
+        state.photos.front = dataUrl;
+        frontPreview.src = dataUrl;
+        frontPreview.classList.remove('hidden');
+        ingredientsBlock?.classList.remove('hidden');
+        checkNextReady();
+      });
     });
 
-    frontInput?.addEventListener('change', () => {
-      const file = frontInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = ev => {
-          frontPreview.src = ev.target.result;
-          frontPreview.classList.remove('hidden');
-          state.photos.front = ev.target.result;
-          $('#ingredientsBlock')?.classList.remove('hidden');
-          checkNextReady();
-        };
-        reader.readAsDataURL(file);
-      }
-    });
-
-    ingBtn?.addEventListener('click', () => {
-      ingInput?.click();
-    });
-
-    ingInput?.addEventListener('change', () => {
-      const file = ingInput.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = ev => {
-          ingPreview.src = ev.target.result;
-          ingPreview.classList.remove('hidden');
-          state.photos.ingredients = ev.target.result;
-          checkNextReady();
-        };
-        reader.readAsDataURL(file);
-      }
+    ingBtn?.addEventListener('click', async () => {
+      if (ingStream) stopStream(ingStream);
+      ingStream = await openCameraWithPreview(ingPreview, async (dataUrl) => {
+        state.photos.ingredients = dataUrl;
+        ingPreview.src = dataUrl;
+        ingPreview.classList.remove('hidden');
+        checkNextReady();
+      });
     });
 
     function checkNextReady(){
@@ -207,6 +192,62 @@
         nextBtn?.classList.remove('hidden');
       }
     }
+
+    function stopStream(stream){
+      stream?.getTracks().forEach(track => track.stop());
+    }
+  }
+
+  async function openCameraWithPreview(previewElement, onCapture){
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.setAttribute('playsinline', '');
+    video.muted = true;
+    video.autoplay = true;
+    video.style.width = '100%';
+    video.style.borderRadius = '12px';
+
+    const captureBtn = document.createElement('button');
+    captureBtn.textContent = 'Take Photo';
+    captureBtn.className = 'btn';
+    captureBtn.style.marginTop = '1rem';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.className = 'btn secondary';
+    cancelBtn.style.marginLeft = '0.5rem';
+
+    const container = previewElement.parentElement;
+    previewElement.classList.add('hidden');
+    container.appendChild(video);
+    container.appendChild(captureBtn);
+    container.appendChild(cancelBtn);
+
+    return new Promise(resolve => {
+      captureBtn.addEventListener('click', () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        stopStream(stream);
+        container.removeChild(video);
+        container.removeChild(captureBtn);
+        container.removeChild(cancelBtn);
+        onCapture(dataUrl);
+        resolve(null);
+      });
+
+      cancelBtn.addEventListener('click', () => {
+        stopStream(stream);
+        container.removeChild(video);
+        container.removeChild(captureBtn);
+        container.removeChild(cancelBtn);
+        resolve(null);
+      });
+    });
   }
 
   document.addEventListener('DOMContentLoaded', () => {
