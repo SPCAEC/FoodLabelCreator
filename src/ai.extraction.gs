@@ -82,3 +82,18 @@ function aiExtract_(req) {
 
   return out;
 }
+
+function normSpecies_(val) {
+  const s = String(val || '').toLowerCase();
+  if (s.includes('dog')) return 'Dog';
+  if (s.includes('cat')) return 'Cat';
+  return '';
+}
+
+function normLifestage_(val) {
+  const s = String(val || '').toLowerCase();
+  if (s.includes('juvenile') || s.includes('puppy') || s.includes('kitten')) return 'Juvenile';
+  if (s.includes('senior')) return 'Senior';
+  if (s.includes('adult')) return 'Adult';
+  return '';
+}
