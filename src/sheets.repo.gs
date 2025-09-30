@@ -71,52 +71,24 @@ function upsertRecord(payload) {
   const headersOrdered = Object.keys(h).sort((a, b) => h[a] - h[b]);
   console.log('[HEADERS ORDERED]', headersOrdered);
   headersOrdered.forEach(head => {
-    let v = '';
-    switch (head) {
-      case COL.UPC:
-        v = upc;
-        break;
-      case COL.SPECIES:
-        v = payload.species || payload.Species || '';
-        break;
-      case COL.LIFESTAGE:
-        v = payload.lifestage || payload.Lifestage || '';
-        break;
-      case COL.BRAND:
-        v = payload.brand || payload.Brand || '';
-        break;
-      case COL.PRODUCT:
-        v = payload.productName || payload.ProductName || '';
-        break;
-      case COL.FLAVOR:
-        v = payload.flavor || payload.Flavor || '';
-        break;
-      case COL.TYPE:
-        v = payload.type || payload['Treat/Food'] || '';
-        break;
-      case COL.INGREDIENTS:
-        v = payload.ingredients || payload.Ingredients || '';
-        break;
-      case COL.PDF_FILE_ID:
-        v = payload.pdfFileId || '';
-        break;
-      case COL.PDF_URL:
-        v = payload.pdfUrl || '';
-        break;
-      case COL.FRONT_PHOTO_ID:
-        v = payload.frontPhotoId || '';
-        break;
-      case COL.ING_PHOTO_ID:
-        v = payload.ingPhotoId || '';
-        break;
-      case COL.CREATED_AT:
-        v = r === -1 ? now : (readByUPC(upc)?.createdAt || now);
-        break;
-      case COL.UPDATED_AT:
-        v = now;
-        break;
-      default:
-        v = '';
+  let v = '';
+  switch(head){
+    case 'UPC': v = payload.upc; break;
+    case 'Species': v = payload.species; break;
+    case 'Lifestage': v = payload.lifestage; break;
+    case 'Brand': v = payload.brand; break;
+    case 'ProductName': v = payload.productName; break;
+    case 'Recipe/Flavor': v = payload.flavor; break;
+    case 'Treat/Food': v = payload.type; break;
+    case 'Ingredients': v = payload.ingredients; break;
+    case 'Expiration': v = payload.expiration; break;
+    case 'PDF File ID': v = payload.pdfFileId || ''; break;
+    case 'PDF URL': v = payload.pdfUrl || ''; break;
+    case 'Created At': v = r === -1 ? now : (readByUPC(payload.upc)?.createdAt || now); break;
+    case 'Updated At': v = now; break;
+    case 'Front Photo ID': v = payload.frontPhotoId || ''; break;
+    case 'Ingredients Photo ID': v = payload.ingPhotoId || ''; break;
+    default: v = '';
     }
     rowVals.push(v);
   });
