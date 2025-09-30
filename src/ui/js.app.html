@@ -239,8 +239,6 @@
       state.pdf = { url: res.pdfUrl, id: res.fileId };
       setMsg(status, 'Label created successfully!', 'success');
 
-      const link = $('#pdfLink');
-      const block = $('#pdfLinkBlock');
       if (link && block) {
         link.href = res.pdfUrl;
         link.textContent = 'View Label PDF';
