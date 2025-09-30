@@ -66,44 +66,47 @@ function apiLookup(payload) {
 }
 
 // Generate label PDF and upsert record
+// Generate label PDF and upsert record
 function apiCreateLabels(payload) {
   return rpcTry(() => {
     if (!payload) throw new Error('Missing payload');
+
+    // ✅ Normalize UPC once
     const upc = normalizeUPC_(payload.upc);
     if (!upc) throw new Error('Invalid UPC');
 
-    // Normalize record
-    const now = new Date().toISOString();
-
-    console.log('[SHEET RECORD]', record);
-
-    // Generate the label file
+    // ✅ Generate the label file first (needs payload)
     const pdf = generateLabelPDF_(payload);
 
-    // Write row to sheet
+    // ✅ Build a normalized record object with exact headers
     const record = {
       UPC: upc,
-      Species: payload.species || '',
-      Lifestage: payload.lifestage || 'Adult',
-      Brand: payload.brand || '',
-      ProductName: payload.productName || '',
-      'Recipe/Flavor': payload.flavor || '',
-      'Treat/Food': payload.type || 'Food',
-      Ingredients: payload.ingredients || '',
+      Species: payload.species || payload.Species || '',
+      Lifestage: payload.lifestage || payload.Lifestage || 'Adult',
+      Brand: payload.brand || payload.Brand || '',
+      ProductName: payload.productName || payload.ProductName || '',
+      'Recipe/Flavor': payload.flavor || payload.Flavor || '',
+      'Treat/Food': payload.type || payload['Treat/Food'] || 'Food',
+      Ingredients: payload.ingredients || payload.Ingredients || '',
       Expiration: payload.expiration || '',
       CreatedAt: new Date().toISOString(),
       UpdatedAt: new Date().toISOString(),
       pdfFileId: pdf.fileId,
       pdfUrl: pdf.url
     };
-    const row = upsertRecord({ ...record, pdfFileId: pdf.fileId, pdfUrl: pdf.url });
 
+    console.log('[SHEET RECORD]', record);
+
+    // ✅ Upsert to sheet
+    const row = upsertRecord(record);
     console.log('[UPSERTED ROW]', row);
 
+    // ✅ Return data back to client
     return {
+      ok: true,
       pdfUrl: pdf.url,
       fileId: pdf.fileId,
-      row
+      row: row
     };
   });
 }
