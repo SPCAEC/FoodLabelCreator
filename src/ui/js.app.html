@@ -99,16 +99,20 @@
     setMsg(statusEl, 'Looking up barcode…');
     spinner(true, loadEl);
     try {
-      const res = await API.lookup(state.upc);
-      console.log('[API LOOKUP RESPONSE]', res);
-      if (res?.found && res.item) {
+      const raw = await API.lookup(state.upc);     // ← gets { ok, data }
+      const res = raw?.data || raw;                // ← unwraps to just the result
+
+      console.log('[API LOOKUP RESPONSE]', res);   // ← optional debug log
+
+      if (res?.found) {
         state.item = normalizeItem(res.item);
-        navigate('screenReview');
-        setTimeout(renderReview, 0);
+        navigate('screenResults');
+        setTimeout(renderReview, 0);  // ← fix: was renderResults()
       } else {
         state.item = null;
         navigate('screenNew');
       }
+
       setMsg(statusEl, '');
     } catch (err) {
       console.error('[lookup error]', err);
