@@ -69,6 +69,7 @@ function upsertRecord(payload) {
 
   // Build row in header order
   const headersOrdered = Object.keys(h).sort((a, b) => h[a] - h[b]);
+  console.log('[HEADERS ORDERED]', headersOrdered);
   headersOrdered.forEach(head => {
     let v = '';
     switch (head) {
