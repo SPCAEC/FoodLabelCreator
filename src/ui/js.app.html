@@ -100,10 +100,10 @@
     spinner(true, loadEl);
     try {
       const res = await API.lookup(state.upc);
-      if (res?.found) {
+      if (res?.found && res.item) {
         state.item = normalizeItem(res.item);
-        navigate('screenResults');
-        setTimeout(renderResults, 0);
+        navigate('screenReview');
+        setTimeout(renderReview, 0);
       } else {
         state.item = null;
         navigate('screenNew');
