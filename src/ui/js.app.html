@@ -1,10 +1,4 @@
 <script>
-/**
- * App controller for Food Label Creator (clean rewrite)
- * - Launch screen: scan or enter UPC
- * - New item flow: capture front + ingredients photos, run AI
- * - Result flow: review or edit metadata before generating label
- */
 (function(){
   const $ = sel => document.querySelector(sel);
   const $$ = sel => [...document.querySelectorAll(sel)];
@@ -17,7 +11,6 @@
     pdf: { url: '', id: '' },
     needs: { ingredients: false }
   };
-  console.log('[INIT] state is', state);
 
   const isValidUPC = v => /^\d{12}$/.test(String(v || '').trim());
   const isValidDate = v => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v || ''));
@@ -151,12 +144,12 @@
       flavor: String(item.flavor || ''),
       species: String(item.species || ''),
       lifestage: String(item.lifestage || ''),
-      ingredients: String(item.ingredients || '')
+      ingredients: String(item.ingredients || ''),
+      type: String(item.type || item['Treat/Food'] || '')
     };
   }
 
   function renderReview(){
-    console.log('[renderReview] Called with:', state.item);
     const i = state.item || {};
     $('#revExp').value = state.exp || '';
     $('#revSpecies').value = i.species || 'Dog';
@@ -166,6 +159,85 @@
     $('#revFlavor').value = i.flavor || '';
     $('#revIngredients').value = i.ingredients || '';
     $('#revTreatFood').value = i.type || 'Food';
+  }
+
+  function wireReviewScreen(){
+    const saveBtn = $('#revSave');
+    const expInput = $('#revExp');
+    const typeSelect = $('#revTreatFood');
+    const status = $('#revStatus');
+    const load = $('#revLoad');
+
+    function updateSaveBtn(){
+      const exp = expInput.value.trim();
+      const type = typeSelect.value;
+      saveBtn.disabled = !(isValidDate(exp) && (type === 'Food' || type === 'Treat'));
+    }
+
+    expInput.addEventListener('input', updateSaveBtn);
+    typeSelect.addEventListener('change', updateSaveBtn);
+
+    saveBtn.addEventListener('click', async () => {
+      const exp = expInput.value.trim();
+      const type = typeSelect.value;
+      if (!exp || !type) return;
+
+      Object.assign(state.item, {
+        species: $('#revSpecies').value,
+        lifestage: $('#revStage').value,
+        brand: $('#revBrand').value.trim(),
+        productName: $('#revName').value.trim(),
+        flavor: $('#revFlavor').value.trim(),
+        ingredients: $('#revIngredients').value.trim(),
+        type
+      });
+
+      state.exp = exp;
+
+      setMsg(status, 'Generating label…');
+      spinner(true, load);
+
+      let res;
+      try {
+        res = await API.createLabels({
+          upc: state.upc,
+          ...state.item,
+          expiration: exp
+        });
+      } catch (err) {
+        console.error('[create label error]', err);
+        setMsg(status, 'Failed to create label.', 'error');
+        spinner(false, load);
+        return;
+      }
+
+      if (!res || !res.pdfUrl) {
+        setMsg(status, 'Label creation failed.', 'error');
+        spinner(false, load);
+        return;
+      }
+
+      state.pdf = { url: res.pdfUrl, id: res.fileId };
+      setMsg(status, 'Label created successfully!', 'success');
+
+      const link = $('#pdfLink');
+      const block = $('#pdfLinkBlock');
+      if (link && block) {
+        link.href = res.pdfUrl;
+        link.textContent = 'View Label PDF';
+        block.classList.remove('hidden');
+      }
+
+      try {
+        window.open(res.pdfUrl, '_blank');
+      } catch (err) {
+        console.warn('[open error]', err);
+      }
+
+      spinner(false, load);
+    });
+
+    updateSaveBtn();
   }
 
   function wireNewItem(){
@@ -197,8 +269,6 @@
     next?.addEventListener('click', async () => {
       const front = state.photos.front;
       const ing = state.photos.ingredients;
-      console.log('[AI EXTRACT] Front:', front?.substring(0, 50));
-      console.log('[AI EXTRACT] Ingredients:', ing?.substring(0, 50));
 
       if (!front || !ing || front.length < 100 || ing.length < 100) {
         setMsg(msg, 'Missing or invalid image(s).', 'error');
@@ -210,28 +280,19 @@
 
       try {
         const extracted = await API.extract({
-          frontDataUrl: state.photos.front,
-          ingDataUrl: state.photos.ingredients
+          frontDataUrl: front,
+          ingDataUrl: ing
         });
 
-        console.log('[EXTRACT RESULT]', extracted);
-
-        if (!extracted || !extracted.ok) {
+        if (!extracted?.ok || typeof extracted.data !== 'object') {
           throw new Error('AI extract failed');
         }
 
-        if (extracted.data && typeof extracted.data === 'object') {
-          state.item = normalizeItem({
-            upc: state.upc,
-            ...extracted.data
-          });
-        } else {
-          console.warn('[EXTRACT WARNING] No usable data returned from AI:', extracted);
-          setMsg(msg, 'AI returned no usable data.', 'error');
-          return;
-        }
+        state.item = normalizeItem({
+          upc: state.upc,
+          ...extracted.data
+        });
 
-        console.log('[DEBUG] Rendering review screen:', state.item);
         navigate('screenReview');
         renderReview();
 
@@ -248,80 +309,6 @@
         actions?.classList.remove('hidden');
       }
     }
-  }
-
-  function wireReviewScreen() {
-    const saveBtn = $('#revSave');
-    const expInput = $('#revExp');
-    const typeSelect = $('#revTreatFood');
-    const status = $('#revStatus');
-    const load = $('#revLoad');
-
-    function updateSaveBtn() {
-      const exp = expInput.value.trim();
-      const type = typeSelect.value;
-      const validDate = /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(exp);
-      saveBtn.disabled = !(validDate && (type === 'Food' || type === 'Treat'));
-    }
-
-    expInput.addEventListener('input', updateSaveBtn);
-    typeSelect.addEventListener('change', updateSaveBtn);
-
-    saveBtn.addEventListener('click', async () => {
-      const exp = expInput.value.trim();
-      const type = typeSelect.value;
-      if (!exp || !type) return;
-
-      Object.assign(state.item, {
-        species: $('#revSpecies').value,
-        lifestage: $('#revStage').value,
-        brand: $('#revBrand').value.trim(),
-        productName: $('#revName').value.trim(),
-        flavor: $('#revFlavor').value.trim(),
-        ingredients: $('#revIngredients').value.trim(),
-        type
-      });
-
-      state.exp = exp;
-
-      setMsg(status, 'Generating label…');
-      spinner(true, load);
-
-      try {
-        const res = await API.createLabels({
-          upc: state.upc,
-          ...state.item,
-          expiration: exp
-        });
-
-        if (!res || !res.pdfUrl) {
-          throw new Error('Label generation failed');
-        }
-
-        state.pdf = { url: res.pdfUrl, id: res.fileId };
-        setMsg(status, 'Label created successfully!', 'success');
-
-        // ✅ Update PDF link in UI
-        const link = $('#pdfLink');
-        const block = $('#pdfLinkBlock');
-        if (link && block) {
-          link.href = res.pdfUrl;
-          link.textContent = 'View Label PDF';
-          block.classList.remove('hidden');
-        }
-
-        // ✅ Open in new tab immediately
-        window.open(res.pdfUrl, '_blank');
-
-      } catch (err) {
-        console.error('[create label error]', err);
-        setMsg(status, 'Failed to create label.', 'error');
-      } finally {
-        spinner(false, load);
-      }
-    });
-
-    updateSaveBtn();
   }
 
   function captureImage(callback){
