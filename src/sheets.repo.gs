@@ -90,6 +90,7 @@ function upsertRecord(payload) {
     case 'Ingredients Photo ID': v = payload.ingPhotoId || ''; break;
     default: v = '';
     }
+    console.log('[UPSERT PAYLOAD]', JSON.stringify(payload, null, 2));
     rowVals.push(v);
   });
 
