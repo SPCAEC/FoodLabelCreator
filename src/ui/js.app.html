@@ -204,7 +204,6 @@
           ...state.item,
           expiration: exp
         });
-        console.log('[LABEL RESPONSE]', res);
       } catch (err) {
         console.error('[create label error]', err);
         setMsg(status, 'Failed to create label.', 'error');
@@ -212,21 +211,27 @@
         return;
       }
 
-      if (res?.ok && res.pdfUrl) {
-        state.pdf = { url: res.pdfUrl, id: res.fileId };
-        setMsg(status, 'Label created successfully!', 'success');
+      console.log('[LABEL RESPONSE]', res);
 
-        const link = $('#pdfLink');
-        const block = $('#pdfLinkBlock');
-        if (link && block) {
-          link.href = res.pdfUrl;
-          link.textContent = 'View Label PDF';
-          block.classList.remove('hidden');
-        }
-
-        window.open(res.pdfUrl, '_blank');
-      } else {
+      if (!res || !res.ok || !res.data || !res.data.pdfUrl) {
         setMsg(status, 'Label creation failed.', 'error');
+        spinner(false, load);
+        return;
+      }
+
+      const { pdfUrl, fileId } = res.data;
+      state.pdf = { url: pdfUrl, id: fileId };
+
+      // ✅ Open PDF
+      window.open(pdfUrl, '_blank');
+
+      // ✅ Also update UI link
+      const link = document.getElementById('pdfLink');
+      const block = document.getElementById('pdfLinkBlock');
+      if (link && block) {
+        link.href = pdfUrl;
+        link.textContent = 'View Label PDF';
+        block.classList.remove('hidden');
       }
 
       spinner(false, load);
