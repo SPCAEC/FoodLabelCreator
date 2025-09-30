@@ -78,8 +78,8 @@ function upsertRecord(payload) {
       case 'Lifestage': return normPayload.lifestage;
       case 'Brand': return normPayload.brand;
       case 'ProductName': return normPayload.productname;
-      case 'Recipe/Flavor': return normPayload.flavor;
-      case 'Treat/Food': return normPayload.type;
+      case 'Recipe or Flavor': return normPayload.flavor;
+      case 'Treat or Food': return normPayload.type;
       case 'Ingredients': return normPayload.ingredients;
       case 'Expiration': return normPayload.expiration;
       case 'PDF File ID': return normPayload.pdffileid || '';
