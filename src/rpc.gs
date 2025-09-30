@@ -1,5 +1,17 @@
 /** Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration) */
 
+/* ---------- RPC Error Wrapper ---------- */
+
+function rpcTry(fn) {
+  try {
+    const result = fn();
+    return { ok: true, data: result };
+  } catch (err) {
+    console.error({ level: 'error', msg: 'rpc error', error: err.toString() });
+    return { ok: false, error: err.toString() };
+  }
+}
+
 /* ---------- Helpers ---------- */
 
 // Normalize any input to a 12-digit UPC-A string
@@ -69,19 +81,15 @@ function apiLookup(payload) {
 }
 
 // Generate label PDF and upsert record
-// Generate label PDF and upsert record
 function apiCreateLabels(payload) {
   return rpcTry(() => {
     if (!payload) throw new Error('Missing payload');
 
-    // ✅ Normalize UPC once
     const upc = normalizeUPC_(payload.upc);
     if (!upc) throw new Error('Invalid UPC');
 
-    // ✅ Generate the label file first (needs payload)
     const pdf = generateLabelPDF_(payload);
 
-    // ✅ Build a normalized record object with exact headers
     const record = {
       UPC: upc,
       Species: payload.species || payload.Species || '',
@@ -100,11 +108,9 @@ function apiCreateLabels(payload) {
 
     console.log('[RECORD TO UPSERT]', JSON.stringify(record, null, 2));
 
-    // ✅ Upsert to sheet
     const row = upsertRecord(record);
     console.log('[UPSERTED ROW]', row);
 
-    // ✅ Return data back to client
     return {
       ok: true,
       pdfUrl: pdf.url,

@@ -100,15 +100,18 @@
     spinner(true, loadEl);
     try {
       const raw = await API.lookup(state.upc);     // ← gets { ok, data }
+      console.log('[RAW LOOKUP RESPONSE]', raw);
       const res = raw?.data || raw;                // ← unwraps to just the result
 
       console.log('[API LOOKUP RESPONSE]', res);   // ← optional debug log
 
-      if (res?.found) {
+      if (res && res.found) {
+        console.log('[LOOKUP MATCH]', res);
         state.item = normalizeItem(res.item);
         navigate('screenResults');
-        setTimeout(renderReview, 0);  // ← fix: was renderResults()
+        setTimeout(renderReview, 0);
       } else {
+        console.log('[LOOKUP NO MATCH]', res);
         state.item = null;
         navigate('screenNew');
       }
