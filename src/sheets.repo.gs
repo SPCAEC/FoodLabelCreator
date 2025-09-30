@@ -59,47 +59,63 @@ function upsertRecord(payload) {
 
   const sh = sh_();
   const h = getHeaders_();
-  const r = findRowByUPC_(payload.upc);
+
+  // Normalize key casing (especially UPC)
+  const upc = payload.upc || payload.UPC;
+  const r = findRowByUPC_(upc);
   const now = new Date();
+
   const rowVals = [];
 
+  // Build row in header order
   const headersOrdered = Object.keys(h).sort((a, b) => h[a] - h[b]);
   headersOrdered.forEach(head => {
     let v = '';
     switch (head) {
       case COL.UPC:
-        v = normalizeUPC_(payload.upc); break;
+        v = upc;
+        break;
       case COL.SPECIES:
-        v = payload.species || ''; break;
+        v = payload.species || payload.Species || '';
+        break;
       case COL.LIFESTAGE:
-        v = payload.lifestage || 'Adult'; break;
+        v = payload.lifestage || payload.Lifestage || '';
+        break;
       case COL.BRAND:
-        v = payload.brand || ''; break;
+        v = payload.brand || payload.Brand || '';
+        break;
       case COL.PRODUCT:
-        v = payload.productName || ''; break;
+        v = payload.productName || payload.ProductName || '';
+        break;
       case COL.FLAVOR:
-        v = payload.flavor || ''; break;
+        v = payload.flavor || payload.Flavor || '';
+        break;
       case COL.TYPE:
-        v = payload.type || 'Food'; break;
+        v = payload.type || payload['Treat/Food'] || '';
+        break;
       case COL.INGREDIENTS:
-        v = payload.ingredients || ''; break;
-      case COL.EXPIRATION:
-        v = payload.expiration || ''; break;
+        v = payload.ingredients || payload.Ingredients || '';
+        break;
       case COL.PDF_FILE_ID:
-        v = payload.pdfFileId || ''; break;
+        v = payload.pdfFileId || '';
+        break;
       case COL.PDF_URL:
-        v = payload.pdfUrl || ''; break;
+        v = payload.pdfUrl || '';
+        break;
       case COL.FRONT_PHOTO_ID:
-        v = payload.frontPhotoId || ''; break;
+        v = payload.frontPhotoId || '';
+        break;
       case COL.ING_PHOTO_ID:
-        v = payload.ingPhotoId || ''; break;
+        v = payload.ingPhotoId || '';
+        break;
       case COL.CREATED_AT:
-        v = r === -1 ? now.toISOString() : (readByUPC(payload.upc)?.createdAt || now.toISOString());
+        v = r === -1 ? now : (readByUPC(upc)?.createdAt || now);
         break;
       case COL.UPDATED_AT:
-        v = now.toISOString(); break;
+        v = now;
+        break;
       default:
-        v = ''; break;
+        v = '';
     }
     rowVals.push(v);
   });
