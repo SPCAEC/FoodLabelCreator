@@ -26,25 +26,27 @@ function getSheet_() {
 function findByUPCInSheet_(upc12) {
   const sh = getSheet_();
   const values = sh.getDataRange().getValues();
-  console.log(`[ROW ${r}] Raw: ${cell}, Normalized: ${norm}, Looking for: ${upc12}`);
   if (values.length < 2) return null;
 
-  const headers = values[0].map(String);
+  const headers = values[0].map(h => String(h).trim());
   const idxUPC = headers.indexOf('UPC');
   if (idxUPC === -1) throw new Error('Header missing: UPC');
 
   for (let r = 1; r < values.length; r++) {
-    const cell = values[r][idxUPC];
+    const row = values[r];
+    const cell = row[idxUPC];
     const norm = normalizeUPC_(cell);
+
     console.log(`[ROW ${r}] Raw: ${cell}, Normalized: ${norm}`);
 
     if (norm === upc12) {
       const rec = {};
-      headers.forEach((h, i) => rec[h] = values[r][i]);
+      headers.forEach((h, i) => rec[h] = row[i]);
       console.log('[MATCH FOUND]', rec);
       return rec;
     }
   }
+
   console.log('[NO MATCH]', upc12);
   return null;
 }
