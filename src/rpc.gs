@@ -95,7 +95,7 @@ function apiCreateLabels(payload) {
       pdfUrl: pdf.url
     };
 
-    console.log('[SHEET RECORD]', record);
+    console.log('[RECORD TO UPSERT]', JSON.stringify(record, null, 2));
 
     // ✅ Upsert to sheet
     const row = upsertRecord(record);
