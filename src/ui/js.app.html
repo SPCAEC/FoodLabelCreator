@@ -204,19 +204,32 @@
           ...state.item,
           expiration: exp
         });
+        console.log('[LABEL RESPONSE]', res);
       } catch (err) {
         console.error('[create label error]', err);
         setMsg(status, 'Failed to create label.', 'error');
         spinner(false, load);
         return;
       }
-      
-      console.log('[LABEL RESPONSE]', res);
-      if (!res || !res.pdfUrl) {
+
+      if (res?.ok && res.pdfUrl) {
+        state.pdf = { url: res.pdfUrl, id: res.fileId };
+        setMsg(status, 'Label created successfully!', 'success');
+
+        const link = $('#pdfLink');
+        const block = $('#pdfLinkBlock');
+        if (link && block) {
+          link.href = res.pdfUrl;
+          link.textContent = 'View Label PDF';
+          block.classList.remove('hidden');
+        }
+
+        window.open(res.pdfUrl, '_blank');
+      } else {
         setMsg(status, 'Label creation failed.', 'error');
-        spinner(false, load);
-        return;
       }
+
+      spinner(false, load);
 
       state.pdf = { url: res.pdfUrl, id: res.fileId };
       setMsg(status, 'Label created successfully!', 'success');
