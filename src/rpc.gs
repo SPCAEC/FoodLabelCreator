@@ -74,19 +74,6 @@ function apiCreateLabels(payload) {
 
     // Normalize record
     const now = new Date().toISOString();
-    const record = {
-      UPC: upc,
-      Species:         payload.species        || payload.Species        || '',
-      Lifestage:       payload.lifestage      || payload.Lifestage      || 'Adult',
-      Brand:           payload.brand          || payload.Brand          || '',
-      ProductName:     payload.productName    || payload.ProductName    || '',
-      'Recipe/Flavor': payload.flavor         || payload.Flavor         || '',
-      'Treat/Food':    payload.type           || payload['Treat/Food']  || 'Food',
-      Ingredients:     payload.ingredients    || payload.Ingredients    || '',
-      Expiration:      payload.expiration     || payload.Expiration     || '',
-      CreatedAt:       now,
-      UpdatedAt:       now
-    };
 
     console.log('[SHEET RECORD]', record);
 
@@ -94,7 +81,6 @@ function apiCreateLabels(payload) {
     const pdf = generateLabelPDF_(payload);
 
     // Write row to sheet
-    // Add this just before upsertRecord(...)
     const record = {
       UPC: upc,
       Species: payload.species || '',
