@@ -1,7 +1,6 @@
 /** Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration) */
 
 /* ---------- RPC Error Wrapper ---------- */
-
 function rpcTry(fn) {
   try {
     const result = fn();
@@ -14,19 +13,17 @@ function rpcTry(fn) {
 
 /* ---------- Helpers ---------- */
 
-// Normalize any input to a 12-digit UPC-A string
 function normalizeUPC_(value) {
   let s = String(value || '').replace(/\D/g, '');
-  if (s.length === 13 && s.startsWith('0')) s = s.slice(1); // Convert EAN-13 → UPC-A
+  if (s.length === 13 && s.startsWith('0')) s = s.slice(1);
   if (s.length > 13) return '';
-  if (s.length < 12) s = s.padStart(12, '0'); // Recover leading zeros
+  if (s.length < 12) s = s.padStart(12, '0');
   return s.length === 12 ? s : '';
 }
 
-// Open configured sheet from script properties
 function getSheet_() {
   const props = PropertiesService.getScriptProperties();
-  const sheetId   = props.getProperty('SHEET_ID')   || '';
+  const sheetId = props.getProperty('SHEET_ID') || '';
   const sheetName = props.getProperty('SHEET_NAME') || 'Products';
   const ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActive();
   const sh = ss.getSheetByName(sheetName);
@@ -34,7 +31,6 @@ function getSheet_() {
   return sh;
 }
 
-// Scan sheet for a row where normalized UPC matches
 function findByUPCInSheet_(upc12) {
   const sh = getSheet_();
   const values = sh.getDataRange().getValues();
@@ -48,9 +44,6 @@ function findByUPCInSheet_(upc12) {
     const row = values[r];
     const cell = row[idxUPC];
     const norm = normalizeUPC_(cell);
-
-    console.log(`[ROW ${r}] Raw: ${cell}, Normalized: ${norm}`);
-
     if (norm === upc12) {
       const rec = {};
       headers.forEach((h, i) => rec[h] = row[i]);
@@ -65,7 +58,6 @@ function findByUPCInSheet_(upc12) {
 
 /* ---------- Public APIs ---------- */
 
-// Lookup a UPC and return the row if found
 function apiLookup(payload) {
   return rpcTry(() => {
     const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
@@ -75,12 +67,27 @@ function apiLookup(payload) {
 
     if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
 
-    const item = findByUPCInSheet_(upc);
-    return item ? { found: true, upc, item } : { found: false, upc };
+    const row = findByUPCInSheet_(upc);
+    if (!row) return { found: false, upc };
+
+    const item = {
+      upc,
+      species: String(row.Species || ''),
+      lifestage: String(row.Lifestage || ''),
+      brand: String(row.Brand || ''),
+      productName: String(row.ProductName || ''),
+      flavor: String(row['Recipe or Flavor'] || ''),
+      type: String(row['Treat or Food'] || ''),
+      ingredients: String(row.Ingredients || ''),
+      expiration: row.Expiration || '',
+      pdfFileId: row.pdfFileId || '',
+      pdfUrl: row.pdfUrl || ''
+    };
+
+    return { found: true, upc, item };
   });
 }
 
-// Generate label PDF and upsert record
 function apiCreateLabels(payload) {
   return rpcTry(() => {
     if (!payload) throw new Error('Missing payload');
@@ -120,12 +127,10 @@ function apiCreateLabels(payload) {
   });
 }
 
-// Backward compatibility alias
 function apiSaveAndCreateLabel(payload) {
   return apiCreateLabels(payload);
 }
 
-// Save front image blob (base64 Data URL)
 function apiUploadFront(upc, dataUrl) {
   return rpcTry(() => {
     const norm = normalizeUPC_(upc);
@@ -135,7 +140,6 @@ function apiUploadFront(upc, dataUrl) {
   });
 }
 
-// Save ingredients image blob (base64 Data URL)
 function apiUploadIngredients(upc, dataUrl) {
   return rpcTry(() => {
     const norm = normalizeUPC_(upc);
@@ -145,7 +149,6 @@ function apiUploadIngredients(upc, dataUrl) {
   });
 }
 
-// Run AI extraction on two photos (base64) and return structured data
 function apiExtractFromImages(payload) {
   return rpcTry(() => {
     const front = payload?.front;

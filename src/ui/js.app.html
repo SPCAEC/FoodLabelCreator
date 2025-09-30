@@ -99,16 +99,17 @@
     setMsg(statusEl, 'Looking up barcode…');
     spinner(true, loadEl);
     try {
-      const raw = await API.lookup(state.upc);     // ← gets { ok, data }
+      const raw = await API.lookup(state.upc); // → expected { ok, data: { found, item } }
       console.log('[RAW LOOKUP RESPONSE]', raw);
-      const res = raw?.data || raw;                // ← unwraps to just the result
 
-      console.log('[API LOOKUP RESPONSE]', res);   // ← optional debug log
+      const res = raw?.data || raw;
+      console.log('[API LOOKUP RESPONSE]', res);
 
-      if (res && res.found) {
-        console.log('[LOOKUP MATCH]', res);
+      if (res && res.found && res.item) {
+        console.log('[LOOKUP MATCH]', res.item);
         state.item = normalizeItem(res.item);
-        navigate('screenResults');
+        state.exp = formatDateFromSheet(res.item.Expiration); // 🆕 preserve expiration
+        navigate('screenReview');
         setTimeout(renderReview, 0);
       } else {
         console.log('[LOOKUP NO MATCH]', res);
@@ -155,6 +156,18 @@
       ingredients: String(item.ingredients || ''),
       type: String(item.type || item['Treat or Food'] || '')
     };
+  }
+
+  function formatDateFromSheet(date){
+    try {
+      const d = new Date(date);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    } catch (e) {
+      return '';
+    }
   }
 
   function renderReview(){
