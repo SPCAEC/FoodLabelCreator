@@ -1,4 +1,4 @@
-/** Sheets read/write for UPC database (revised Sept 2025) */
+/** Sheets read/write for UPC database (revised Sept 2025 with normalized payload and clean logging) */
 
 function sh_() {
   return SpreadsheetApp.openById(CFG.SHEET_ID).getSheetByName(CFG.SHEET_NAME);
@@ -57,41 +57,41 @@ function upsertRecord(payload) {
     throw new Error('upsertRecord: missing or invalid payload');
   }
 
+  // Normalize keys to lowercase
+  const normPayload = {};
+  Object.keys(payload).forEach(k => normPayload[k.toLowerCase()] = payload[k]);
+
   const sh = sh_();
   const h = getHeaders_();
-
-  // Normalize key casing (especially UPC)
-  const upc = payload.upc || payload.UPC;
-  const r = findRowByUPC_(upc);
   const now = new Date();
+  const upc = normPayload.upc;
+  const r = findRowByUPC_(upc);
 
-  const rowVals = [];
-
-  // Build row in header order
   const headersOrdered = Object.keys(h).sort((a, b) => h[a] - h[b]);
   console.log('[HEADERS ORDERED]', headersOrdered);
-  headersOrdered.forEach(head => {
-  let v = '';
-  switch(head){
-    case 'UPC': v = payload.upc; break;
-    case 'Species': v = payload.species; break;
-    case 'Lifestage': v = payload.lifestage; break;
-    case 'Brand': v = payload.brand; break;
-    case 'ProductName': v = payload.productName; break;
-    case 'Recipe/Flavor': v = payload.flavor; break;
-    case 'Treat/Food': v = payload.type; break;
-    case 'Ingredients': v = payload.ingredients; break;
-    case 'Expiration': v = payload.expiration; break;
-    case 'PDF File ID': v = payload.pdfFileId || ''; break;
-    case 'PDF URL': v = payload.pdfUrl || ''; break;
-    case 'Created At': v = r === -1 ? now : (readByUPC(payload.upc)?.createdAt || now); break;
-    case 'Updated At': v = now; break;
-    case 'Front Photo ID': v = payload.frontPhotoId || ''; break;
-    case 'Ingredients Photo ID': v = payload.ingPhotoId || ''; break;
-    default: v = '';
+  console.log('[UPSERT PAYLOAD]', JSON.stringify(payload, null, 2));
+
+  const rowVals = headersOrdered.map(head => {
+    switch (head) {
+      case 'UPC': return normPayload.upc;
+      case 'Species': return normPayload.species;
+      case 'Lifestage': return normPayload.lifestage;
+      case 'Brand': return normPayload.brand;
+      case 'ProductName': return normPayload.productname;
+      case 'Recipe/Flavor': return normPayload.flavor;
+      case 'Treat/Food': return normPayload.type;
+      case 'Ingredients': return normPayload.ingredients;
+      case 'Expiration': return normPayload.expiration;
+      case 'PDF File ID': return normPayload.pdffileid || '';
+      case 'PDF URL': return normPayload.pdfurl || '';
+      case 'Created At':
+        return r === -1 ? now : (readByUPC(normPayload.upc)?.createdAt || now);
+      case 'Updated At':
+        return now;
+      case 'Front Photo ID': return normPayload.frontphotoid || '';
+      case 'Ingredients Photo ID': return normPayload.ingphotoid || '';
+      default: return '';
     }
-    console.log('[UPSERT PAYLOAD]', JSON.stringify(payload, null, 2));
-    rowVals.push(v);
   });
 
   if (r === -1) {
