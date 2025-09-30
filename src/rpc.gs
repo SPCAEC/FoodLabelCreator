@@ -26,6 +26,7 @@ function getSheet_() {
 function findByUPCInSheet_(upc12) {
   const sh = getSheet_();
   const values = sh.getDataRange().getValues();
+  console.log(`[ROW ${r}] Raw: ${cell}, Normalized: ${norm}, Looking for: ${upc12}`);
   if (values.length < 2) return null;
 
   const headers = values[0].map(String);
