@@ -94,6 +94,22 @@ function apiCreateLabels(payload) {
     const pdf = generateLabelPDF_(payload);
 
     // Write row to sheet
+    // Add this just before upsertRecord(...)
+    const record = {
+      UPC: upc,
+      Species: payload.species || '',
+      Lifestage: payload.lifestage || 'Adult',
+      Brand: payload.brand || '',
+      ProductName: payload.productName || '',
+      'Recipe/Flavor': payload.flavor || '',
+      'Treat/Food': payload.type || 'Food',
+      Ingredients: payload.ingredients || '',
+      Expiration: payload.expiration || '',
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString(),
+      pdfFileId: pdf.fileId,
+      pdfUrl: pdf.url
+    };
     const row = upsertRecord({ ...record, pdfFileId: pdf.fileId, pdfUrl: pdf.url });
 
     console.log('[UPSERTED ROW]', row);

@@ -210,7 +210,8 @@
         spinner(false, load);
         return;
       }
-
+      
+      console.log('[LABEL RESPONSE]', res);
       if (!res || !res.pdfUrl) {
         setMsg(status, 'Label creation failed.', 'error');
         spinner(false, load);
