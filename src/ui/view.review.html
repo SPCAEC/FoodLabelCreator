@@ -6,7 +6,13 @@
     <!-- Expiration -->
     <div class="field">
       <label for="revExp">Expiration (mm/dd/yyyy)</label>
-      <input id="revExp" placeholder="mm/dd/yyyy" />
+      <input 
+        id="revExp"
+        type="date"
+        pattern="\d{4}-\d{2}-\d{2}"
+        placeholder="MM/DD/YYYY"
+        inputmode="numeric"
+      />
       <div class="hint">Choose the 1st of the month if the exact day isn’t listed.</div>
     </div>
 

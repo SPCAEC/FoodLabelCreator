@@ -29,11 +29,22 @@
     }
   }
 
-  function navigate(id){
+  function scrollToEl(el) {
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function navigate(id) {
     $$('.screen').forEach(s => s.classList.remove('active'));
     const el = document.getElementById(id);
     if (el) {
       el.classList.add('active');
+      // Smooth scroll to the top of the newly activated screen
+      requestAnimationFrame(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    } else {
+      // fallback scroll if element not found
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }
@@ -195,7 +206,16 @@
       saveBtn.disabled = !(isValidDate(exp) && (type === 'Food' || type === 'Treat'));
     }
 
-    expInput.addEventListener('input', updateSaveBtn);
+    expInput.addEventListener('input', e => {
+      let v = e.target.value.replace(/\D/g, ''); // strip non-digits
+      if (v.length >= 4 && v.length <= 6) {
+        v = v.replace(/^(\d{2})(\d{0,2})/, (_, m, d) => d ? `${m}/${d}` : `${m}`);
+      } else if (v.length > 6) {
+        v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, (_, m, d, y) => `${m}/${d}/${y}`);
+      }
+      e.target.value = v;
+      updateSaveBtn();
+    });
     typeSelect.addEventListener('change', updateSaveBtn);
 
     saveBtn.addEventListener('click', async () => {
