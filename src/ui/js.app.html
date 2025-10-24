@@ -207,13 +207,23 @@
     }
 
     expInput.addEventListener('input', e => {
-      let v = e.target.value.replace(/\D/g, ''); // strip non-digits
-      if (v.length >= 4 && v.length <= 6) {
-        v = v.replace(/^(\d{2})(\d{0,2})/, (_, m, d) => d ? `${m}/${d}` : `${m}`);
-      } else if (v.length > 6) {
-        v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, (_, m, d, y) => `${m}/${d}/${y}`);
+      // Only auto-format if the browser is NOT using the date picker
+      if (expInput.type === 'text' || !expInput.value.includes('-')) {
+        let v = e.target.value.replace(/\D/g, '');
+        if (v.length >= 4 && v.length <= 6) {
+          v = v.replace(/^(\d{2})(\d{0,2})/, (_, m, d) => d ? `${m}/${d}` : `${m}`);
+        } else if (v.length > 6) {
+          v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, (_, m, d, y) => `${m}/${d}/${y}`);
+        }
+        e.target.value = v;
       }
-      e.target.value = v;
+
+      updateSaveBtn();
+    });
+
+    // Ensure that selecting a date via picker triggers updateSaveBtn
+    expInput.addEventListener('change', e => {
+      console.log('[expInput change]', e.target.value);
       updateSaveBtn();
     });
     typeSelect.addEventListener('change', updateSaveBtn);
