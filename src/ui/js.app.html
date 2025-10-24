@@ -203,52 +203,79 @@
     $('#revTreatFood').value = i.type || 'Food';
   }
 
-  function wireReviewScreen(){
+  function wireReviewScreen() {
     const saveBtn = $('#revSave');
     const expInput = $('#revExp');
     const typeSelect = $('#revTreatFood');
     const status = $('#revStatus');
     const load = $('#revLoad');
-    // supports both "2025-10-15" (picker) and "10/15/2025" (manual)
+
+    // ────────────────────────────────────────────────────────────────
+    // Hybrid date validation: supports both picker + manual entry
+    // ────────────────────────────────────────────────────────────────
     const isValidDate = v => {
       if (!v) return false;
-      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;  // YYYY-MM-DD from date picker
-      if (/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(v)) return true; // MM/DD/YYYY typed
+      // native date picker → "YYYY-MM-DD"
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;
+      // manual entry → "MM/DD/YYYY"
+      if (/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(v)) return true;
       return false;
     };
 
-    function updateSaveBtn(){
+    // ────────────────────────────────────────────────────────────────
+    // Enable/disable the Save button
+    // ────────────────────────────────────────────────────────────────
+    function updateSaveBtn() {
       const exp = expInput.value.trim();
       const type = typeSelect.value;
-      saveBtn.disabled = !(isValidDate(exp) && (type === 'Food' || type === 'Treat'));
+      const valid = isValidDate(exp);
+      console.log('[updateSaveBtn]', { exp, valid, type });
+      saveBtn.disabled = !(valid && (type === 'Food' || type === 'Treat'));
+
+      // Optional: visual feedback
+      expInput.classList.toggle('success', valid);
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // Smart manual date formatting
+    // Allows typing 10162025 → 10/16/2025
+    // ────────────────────────────────────────────────────────────────
     expInput.addEventListener('input', e => {
-      // Only auto-format if the browser is NOT using the date picker
+      // Only auto-format if not using native picker
       if (expInput.type === 'text' || !expInput.value.includes('-')) {
-        let v = e.target.value.replace(/\D/g, '');
-        if (v.length >= 4 && v.length <= 6) {
-          v = v.replace(/^(\d{2})(\d{0,2})/, (_, m, d) => d ? `${m}/${d}` : `${m}`);
-        } else if (v.length > 6) {
-          v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, (_, m, d, y) => `${m}/${d}/${y}`);
+        let v = e.target.value.replace(/\D/g, ''); // digits only
+
+        if (v.length >= 3 && v.length <= 4) {
+          // e.g. 101 → 10/1 or 1016 → 10/16
+          v = v.replace(/^(\d{2})(\d{1,2})/, '$1/$2');
+        } else if (v.length >= 5 && v.length <= 8) {
+          // e.g. 10162025 → 10/16/2025
+          v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, '$1/$2/$3');
         }
+
         e.target.value = v;
       }
 
       updateSaveBtn();
     });
 
-    // Ensure that selecting a date via picker triggers updateSaveBtn
+    // ────────────────────────────────────────────────────────────────
+    // Ensure date picker selections also trigger validation
+    // ────────────────────────────────────────────────────────────────
     expInput.addEventListener('change', e => {
       console.log('[expInput change]', e.target.value);
       updateSaveBtn();
     });
+
     typeSelect.addEventListener('change', updateSaveBtn);
 
+    // ────────────────────────────────────────────────────────────────
+    // Main save + label creation flow
+    // ────────────────────────────────────────────────────────────────
     saveBtn.addEventListener('click', async () => {
       const exp = expInput.value.trim();
       const type = typeSelect.value;
-      if (!exp || !type) return;
+      if (!isValidDate(exp) || !type) return;
 
       Object.assign(state.item, {
         species: $('#revSpecies').value,
@@ -265,61 +292,41 @@
       setMsg(status, 'Generating label…');
       spinner(true, load);
 
-      let res;
       try {
-        res = await API.createLabels({
+        const res = await API.createLabels({
           upc: state.upc,
           ...state.item,
           expiration: exp
         });
+
+        console.log('[LABEL RESPONSE]', res);
+
+        if (!res?.ok || !res?.data?.pdfUrl) {
+          setMsg(status, 'Label creation failed.', 'error');
+          spinner(false, load);
+          return;
+        }
+
+        const { pdfUrl, fileId } = res.data;
+        state.pdf = { url: pdfUrl, id: fileId };
+
+        // ✅ Update UI + open PDF
+        const link = $('#pdfLink');
+        const block = $('#pdfLinkBlock');
+        if (link && block) {
+          link.href = pdfUrl;
+          link.textContent = 'View Label PDF';
+          block.classList.remove('hidden');
+        }
+
+        window.open(pdfUrl, '_blank');
+        setMsg(status, 'Label created successfully!', 'success');
       } catch (err) {
         console.error('[create label error]', err);
         setMsg(status, 'Failed to create label.', 'error');
+      } finally {
         spinner(false, load);
-        return;
       }
-
-      console.log('[LABEL RESPONSE]', res);
-
-      if (!res || !res.ok || !res.data || !res.data.pdfUrl) {
-        setMsg(status, 'Label creation failed.', 'error');
-        spinner(false, load);
-        return;
-      }
-
-      const { pdfUrl, fileId } = res.data;
-      state.pdf = { url: pdfUrl, id: fileId };
-
-      // ✅ Open PDF
-      window.open(pdfUrl, '_blank');
-
-      // ✅ Also update UI link
-      const link = document.getElementById('pdfLink');
-      const block = document.getElementById('pdfLinkBlock');
-      if (link && block) {
-        link.href = pdfUrl;
-        link.textContent = 'View Label PDF';
-        block.classList.remove('hidden');
-      }
-
-      spinner(false, load);
-
-      state.pdf = { url: res.pdfUrl, id: res.fileId };
-      setMsg(status, 'Label created successfully!', 'success');
-
-      if (link && block) {
-        link.href = res.pdfUrl;
-        link.textContent = 'View Label PDF';
-        block.classList.remove('hidden');
-      }
-
-      try {
-        window.open(res.pdfUrl, '_blank');
-      } catch (err) {
-        console.warn('[open error]', err);
-      }
-
-      spinner(false, load);
     });
 
     updateSaveBtn();
