@@ -13,7 +13,17 @@
   };
 
   const isValidUPC = v => /^\d{12}$/.test(String(v || '').trim());
-  const isValidDate = v => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v || ''));
+  const isValidDate = v => {
+    if (!v) return false;
+
+    // native date input returns "YYYY-MM-DD"
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;
+
+    // manual text input "MM/DD/YYYY"
+    if (/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(v)) return true;
+
+    return false;
+  };
 
   function setMsg(el, text, type){
     if (!el) return;
@@ -199,6 +209,13 @@
     const typeSelect = $('#revTreatFood');
     const status = $('#revStatus');
     const load = $('#revLoad');
+    // supports both "2025-10-15" (picker) and "10/15/2025" (manual)
+    const isValidDate = v => {
+      if (!v) return false;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return true;  // YYYY-MM-DD from date picker
+      if (/^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(v)) return true; // MM/DD/YYYY typed
+      return false;
+    };
 
     function updateSaveBtn(){
       const exp = expInput.value.trim();
