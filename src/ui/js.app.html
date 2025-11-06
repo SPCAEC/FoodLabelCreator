@@ -98,6 +98,7 @@
   }
 
   function resetApp() {
+    // 🔄 Reset in-memory state
     Object.assign(state, {
       upc: '',
       item: null,
@@ -106,13 +107,41 @@
       pdf: { url: '', id: '' },
       needs: { ingredients: false }
     });
-    $('#upcInput')?.value && ($('#upcInput').value = '');
-    $('#lookupBtn')?.setAttribute('disabled','');
+
+    // 🧹 Clear and reset UI elements safely
+    const upcInput = $('#upcInput');
+    const lookupBtn = $('#lookupBtn');
+    const statusEl = $('#launchInfo');
+
+    if (upcInput) upcInput.value = '';
+    if (lookupBtn) lookupBtn.setAttribute('disabled', '');
+    if (statusEl) setMsg(statusEl, '');
+
+    // 🧭 Navigate back to launch screen
     navigate('screenLaunch');
+    setTimeout(() => smoothScroll($('#screenLaunch'), 'start'), 100);
+
+    // 🚫 Hide all Start Over buttons again
+    if (typeof window.hideStartOver === 'function') window.hideStartOver();
+
+    console.log('[resetApp] App state reset and returned to launch screen');
   }
 
   function wireGlobal() {
-    $$('.startOver').forEach(btn => btn.addEventListener('click', resetApp));
+    // Wire up the Start Over button(s)
+    const startButtons = $$('.startOver');
+    startButtons.forEach(btn => {
+      btn.addEventListener('click', resetApp);
+      btn.style.display = 'none'; // hide initially
+    });
+
+    // Small helper we can call elsewhere
+    window.showStartOver = () => {
+      startButtons.forEach(btn => (btn.style.display = 'inline-block'));
+    };
+    window.hideStartOver = () => {
+      startButtons.forEach(btn => (btn.style.display = 'none'));
+    };
   }
 
   // ──────────────────────────────────────────────────────────────
@@ -159,25 +188,37 @@
   async function doLookup(statusEl, loadEl) {
     setMsg(statusEl, 'Looking up barcode…');
     spinner(true, loadEl);
+
     try {
       const raw = await API.lookup(state.upc);
       const res = raw?.data || raw;
 
       if (res && res.found && res.item) {
+        // ✅ Existing item found in sheet
         state.item = normalizeItem(res.item);
-        state.exp  = formatDateFromSheet(res.item.Expiration);
+        state.exp = formatDateFromSheet(res.item.Expiration);
+
         navigate('screenReview');
         setTimeout(renderReview, 0);
         setTimeout(() => smoothScroll($('#screenReview'), 'start'), 50);
+
+        // ✅ Show "Start Over" button after successful lookup
+        if (typeof window.showStartOver === 'function') window.showStartOver();
       } else {
+        // 🆕 New item — go to photo capture flow
         state.item = null;
         navigate('screenNew');
         setTimeout(() => smoothScroll($('#screenNew .card'), 'start'), 50);
+
+        // ✅ Also show "Start Over" for new-item flow
+        if (typeof window.showStartOver === 'function') window.showStartOver();
       }
+
+      // Clear status message
       setMsg(statusEl, '');
     } catch (err) {
       console.error('[lookup error]', err);
-      setMsg(statusEl, 'Lookup failed.', 'error');
+      setMsg(statusEl, 'Lookup failed. Please try again.', 'error');
     } finally {
       spinner(false, loadEl);
     }
@@ -267,17 +308,25 @@
     };
 
     // allow digits typing without slashes
-    expInput?.addEventListener('input', (e) => {
-      // If the platform is injecting yyyy-mm-dd (rare in text), keep it
-      if (!isISO(e.target.value)) {
-        e.target.value = autoFormatUS(e.target.value);
+    // --- Expiration Input Handling ---
+    expInput.addEventListener('input', e => {
+      // Strip all non-numeric characters
+      let v = e.target.value.replace(/\D/g, '');
+
+      // Auto-format as MM/DD/YYYY
+      if (v.length >= 3 && v.length <= 4) {
+        v = v.replace(/^(\d{2})(\d{0,2})/, (_, m, d) => (d ? `${m}/${d}` : `${m}`));
+      } else if (v.length > 4) {
+        v = v.replace(/^(\d{2})(\d{2})(\d{0,4}).*/, (_, m, d, y) => `${m}/${d}/${y}`);
       }
+
+      e.target.value = v.slice(0, 10); // limit to 10 chars total
       updateSaveBtn();
     });
-    // when a native date picker writes back (some Android OEM keyboards),
-    // normalize to US for display and validation
-    expInput?.addEventListener('change', (e) => {
-      e.target.value = toUS(e.target.value);
+
+    // Allow manual edits or date picker updates
+    expInput.addEventListener('change', e => {
+      console.log('[revExp change]', e.target.value);
       updateSaveBtn();
     });
 
