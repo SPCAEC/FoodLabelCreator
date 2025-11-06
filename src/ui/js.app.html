@@ -191,13 +191,21 @@
 
     try {
       const raw = await API.lookup(state.upc);
-      console.log('[LOOKUP RAW]', JSON.stringify(raw, null, 2));
-      const res = raw?.data || raw;
+      console.log('[LOOKUP RAW]', raw);
 
+      // Handle different possible response shapes from Apps Script
+      let res = null;
+      if (raw && raw.ok && raw.data) {
+        res = raw.data; // wrapped rpcTry()
+      } else if (raw && typeof raw === 'object' && 'found' in raw) {
+        res = raw; // direct return
+      }
+      console.log('[LOOKUP PARSED]', res);
+      console.log('[LOOKUP RESULT]', res);
       if (res && res.found && res.item) {
         // ✅ Existing item found in sheet
         state.item = normalizeItem(res.item);
-        state.exp = formatDateFromSheet(res.item.Expiration);
+        state.exp = formatDateFromSheet(res.item.Expiration || res.item.expiration || '');
 
         navigate('screenReview');
         setTimeout(renderReview, 0);

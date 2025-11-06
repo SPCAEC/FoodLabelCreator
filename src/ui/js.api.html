@@ -66,14 +66,14 @@
       const key = toSheetKey(upc);
       console.log('[API.lookup] Sending lookup for', key);
 
-      return _gsr('apiLookup', { upc }).then(res => {
-        // unwrap rpcTry({ ok, data }) or nested formats
-        if (res && typeof res === 'object') {
-          if ('data' in res) return res.data;
-          if ('ok' in res && res.ok && typeof res.ok === 'object' && 'data' in res.ok)
-            return res.ok.data;
-        }
-        return res;
+      return _gsr('apiLookupWrapped', { upc }).then(res => {
+        console.log('[API.lookup result]', res);
+
+        // Unwrap rpcTry({ ok, data }) or direct object
+        if (res && res.ok && res.data) return res;          // already rpcTry shape
+        if (res && res.data && res.data.found !== undefined) return res.data; // nested inside ok:true
+        if (res && res.found !== undefined) return res;     // direct { found:... }
+        return { found: false, reason: 'unexpected_format', raw: res };
       });
     },
 

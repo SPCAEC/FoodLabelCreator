@@ -68,8 +68,10 @@ function apiLookup(payload) {
 
 /* ---------- Wrapper to expose cleanly ---------- */
 function apiLookupWrapped(payload) {
+  console.log('[apiLookupWrapped] payload', JSON.stringify(payload));
   const result = rpcTry(() => apiLookup(payload));
-  return result; // ✅ Explicitly return
+  console.log('[apiLookupWrapped] result', JSON.stringify(result));
+  return result;
 }
 
 /* ---------- Create / Save ---------- */
@@ -89,7 +91,7 @@ function apiCreateLabels(payload) {
       'Recipe or Flavor': payload.flavor || '',
       'Treat or Food': payload.type || 'Food',
       Ingredients: payload.ingredients || '',
-      Expiration: payload.expiration || '',
+      Expiration: payload.expiration || payload.Expiration || '',
       CreatedAt: new Date().toISOString(),
       UpdatedAt: new Date().toISOString(),
       pdfFileId: pdf.fileId,
