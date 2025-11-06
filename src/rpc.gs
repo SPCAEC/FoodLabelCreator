@@ -1,4 +1,8 @@
-/** Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration) */
+/** ---------------------------------------------------------------------------
+ * Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration)
+ * Updated to ensure robust UPC normalization + correct lookup matching
+ * ---------------------------------------------------------------------------
+ */
 
 /* ---------- RPC Error Wrapper ---------- */
 function rpcTry(fn) {
@@ -6,21 +10,32 @@ function rpcTry(fn) {
     const result = fn();
     return { ok: true, data: result };
   } catch (err) {
-    console.error({ level: 'error', msg: 'rpc error', error: err.toString() });
+    console.error({
+      level: 'error',
+      msg: 'rpc error',
+      error: err.toString(),
+      stack: err.stack
+    });
     return { ok: false, error: err.toString() };
   }
 }
 
 /* ---------- Helpers ---------- */
 
+/**
+ * Normalize to 12-digit UPC-A safely from any value type.
+ */
 function normalizeUPC_(value) {
-  let s = String(value || '').replace(/\D/g, '');
+  let s = String(value == null ? '' : value).replace(/\D/g, '');
   if (s.length === 13 && s.startsWith('0')) s = s.slice(1);
   if (s.length > 13) return '';
-  if (s.length < 12) s = s.padStart(12, '0');
+  if (s.length < 12 && s.length > 0) s = s.padStart(12, '0');
   return s.length === 12 ? s : '';
 }
 
+/**
+ * Get configured sheet.
+ */
 function getSheet_() {
   const props = PropertiesService.getScriptProperties();
   const sheetId = props.getProperty('SHEET_ID') || '';
@@ -31,6 +46,9 @@ function getSheet_() {
   return sh;
 }
 
+/**
+ * Find a row in the Sheet by normalized UPC.
+ */
 function findByUPCInSheet_(upc12) {
   const sh = getSheet_();
   const values = sh.getDataRange().getValues();
@@ -40,35 +58,44 @@ function findByUPCInSheet_(upc12) {
   const idxUPC = headers.indexOf('UPC');
   if (idxUPC === -1) throw new Error('Header missing: UPC');
 
+  let match = null;
   for (let r = 1; r < values.length; r++) {
-    const row = values[r];
-    const cell = row[idxUPC];
+    const cell = values[r][idxUPC];
     const norm = normalizeUPC_(cell);
     if (norm === upc12) {
-      const rec = {};
-      headers.forEach((h, i) => rec[h] = row[i]);
-      console.log('[MATCH FOUND]', rec);
-      return rec;
+      match = {};
+      headers.forEach((h, i) => (match[h] = values[r][i]));
+      console.log(`[MATCH FOUND] Row ${r + 1}: ${upc12}`);
+      break;
     }
   }
 
-  console.log('[NO MATCH]', upc12);
-  return null;
+  if (!match) console.log(`[NO MATCH] ${upc12}`);
+  return match;
 }
 
 /* ---------- Public APIs ---------- */
 
+/**
+ * Lookup product info by UPC.
+ * Returns { ok:true, data:{ found:boolean, upc:string, item:Object|null } }
+ */
 function apiLookup(payload) {
   return rpcTry(() => {
-    const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
-    const upc = normalizeUPC_(raw);
+    const raw = (payload && typeof payload === 'object' && 'upc' in payload)
+      ? payload.upc
+      : payload;
 
-    console.log('[LOOKUP]', { raw, normalized: upc });
+    const upc = normalizeUPC_(raw);
+    console.log('[LOOKUP REQUEST]', { raw, normalized: upc });
 
     if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
 
     const row = findByUPCInSheet_(upc);
-    if (!row) return { found: false, upc };
+    if (!row) {
+      console.log('[LOOKUP RESULT] Not found', upc);
+      return { found: false, upc };
+    }
 
     const item = {
       upc,
@@ -84,14 +111,17 @@ function apiLookup(payload) {
       pdfUrl: row.pdfUrl || ''
     };
 
+    console.log('[LOOKUP RESULT] Found match', item);
     return { found: true, upc, item };
   });
 }
 
+/**
+ * Create labels + save or upsert row.
+ */
 function apiCreateLabels(payload) {
   return rpcTry(() => {
     if (!payload) throw new Error('Missing payload');
-
     const upc = normalizeUPC_(payload.upc);
     if (!upc) throw new Error('Invalid UPC');
 
@@ -113,16 +143,16 @@ function apiCreateLabels(payload) {
       pdfUrl: pdf.url
     };
 
-    console.log('[RECORD TO UPSERT]', JSON.stringify(record, null, 2));
+    console.log('[UPSERT RECORD]', JSON.stringify(record, null, 2));
 
     const row = upsertRecord(record);
-    console.log('[UPSERTED ROW]', row);
+    console.log('[UPSERT RESULT]', row);
 
     return {
       ok: true,
       pdfUrl: pdf.url,
       fileId: pdf.fileId,
-      row: row
+      row
     };
   });
 }
