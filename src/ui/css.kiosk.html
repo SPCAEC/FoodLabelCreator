@@ -1,77 +1,112 @@
 <style>
-:root{
-  --bg:#fff; --fg:#0f172a; --muted:#475569;
-  --accent:#0ea5e9; --accent-hover:#0284c7;
-  --success:#16a34a; --danger:#dc2626;
-  --ring:0 0 0 3px rgba(14,165,233,.35);
+:root {
+  --bg: #fff;
+  --fg: #0f172a;
+  --muted: #475569;
+  --accent: #0ea5e9;
+  --accent-hover: #0284c7;
+  --success: #16a34a;
+  --danger: #dc2626;
+  --ring: 0 0 0 3px rgba(14, 165, 233, 0.35);
 
-  --base:26px;
-  --heading:36px;
-  --button:30px;
-  --input:28px;
-  --label:26px;
+  --base: 26px;
+  --heading: 36px;
+  --button: 30px;
+  --input: 28px;
+  --label: 26px;
 }
 
-*{ box-sizing:border-box }
-html,body{
-  height:100%;
-  -webkit-text-size-adjust:none;
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  -webkit-text-size-adjust: none;
   font-size: var(--base) !important;
+  overscroll-behavior-y: none;
 }
-body{
-  margin:0;
-  color:var(--fg);
-  background:var(--bg);
-  font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-  line-height:1.5;
+body {
+  margin: 0;
+  color: var(--fg);
+  background: var(--bg);
+  font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
 }
 
-/* Layout */
-.app{
-  width:100%;
-  max-width:none;
-  margin:0;
-  padding:0 1rem 2.5rem;
+/* ───────────── Layout ───────────── */
+.app {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 1rem 2.5rem;
 }
-header{
-  padding:0.5rem 0 0 0;
+header {
+  padding: 0.5rem 0 0 0;
   margin-bottom: 0;
 }
-h1{
+h1 {
   font-size: calc(var(--heading) / var(--base) * 1rem);
-  margin:.25rem 0;
-  line-height:1.2;
+  margin: 0.25rem 0;
+  line-height: 1.2;
 }
-.subtitle{
-  color:var(--muted);
-  margin:0 0 .5rem 0;
-  font-size:1rem;
+.subtitle {
+  color: var(--muted);
+  margin: 0 0 0.5rem 0;
+  font-size: 1rem;
 }
-.row{ display:grid; gap:1rem; }
-.field{ display:grid; gap:.5rem; }
-label{
-  font-weight:700;
+
+/* Centered container for launch & camera screens */
+.centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+/* Rows and fields */
+.row {
+  display: grid;
+  gap: 1rem;
+}
+.field {
+  display: grid;
+  gap: 0.5rem;
+}
+label {
+  font-weight: 700;
   font-size: calc(var(--label) / var(--base) * 1rem);
 }
 
-/* Text inputs (NOT checkboxes) */
-input:not([type="checkbox"]), textarea, select{
-  width:100%;
+/* ───────────── Inputs ───────────── */
+input:not([type="checkbox"]),
+textarea,
+select {
+  width: 100%;
   font-size: calc(var(--input) / var(--base) * 1rem);
-  padding:1.1rem 1.25rem;
-  border:2px solid #555;
-  border-radius:18px;
-  -webkit-appearance:none; appearance:none;
-  background:#fff;
+  padding: 1.1rem 1.25rem;
+  border: 2px solid #555;
+  border-radius: 18px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #fff;
 }
-::placeholder{ color:#666; opacity:1; }
-input:focus, textarea:focus, select:focus{
-  outline:none;
-  box-shadow:var(--ring);
-  border-color:var(--accent);
+::placeholder {
+  color: #666;
+  opacity: 1;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: var(--ring);
+  border-color: var(--accent);
+}
+input.success {
+  border-color: var(--success);
 }
 
-/* Inline field row (e.g. expiration + calendar icon) */
+/* Inline field (e.g., expiration + icon) */
 .field.inline {
   display: flex;
   align-items: center;
@@ -81,49 +116,97 @@ input:focus, textarea:focus, select:focus{
   flex: 1;
 }
 
-/* Checkbox row */
-.check-row{
-  display:flex;
-  align-items:center;
-  gap:.8rem;
-  padding:.25rem .25rem;
+/* Dropdown fix (Food/Treat issue) */
+select,
+.dropdown-fix select {
+  position: relative;
+  z-index: 10;
+  background-color: #fff;
 }
-.check-row input[type="checkbox"]{
-  width:1.25rem; height:1.25rem;
-  -webkit-appearance: checkbox; appearance: checkbox;
-  margin:0; cursor:pointer;
-}
-.check-row label{ font-weight:700; font-size:1rem; margin:0; }
 
-/* Buttons */
-.actions{ display:grid; gap:.9rem; }
-.btn{
-  display:flex; align-items:center; justify-content:center; gap:.7rem; width:100%;
+/* ───────────── Checkbox row ───────────── */
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.25rem 0.25rem;
+}
+.check-row input[type="checkbox"] {
+  width: 1.25rem;
+  height: 1.25rem;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  margin: 0;
+  cursor: pointer;
+}
+.check-row label {
+  font-weight: 700;
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* ───────────── Buttons ───────────── */
+.actions {
+  display: grid;
+  gap: 0.9rem;
+  width: 100%;
+}
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  width: 100%;
   font-size: calc(var(--button) / var(--base) * 1rem);
-  padding:1.35rem 1.2rem;
-  border-radius:22px;
-  border:1px solid transparent;
-  background:var(--accent);
-  color:#fff;
-  font-weight:800;
-  -webkit-appearance:none; appearance:none;
+  padding: 1.35rem 1.2rem;
+  border-radius: 22px;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: background 0.15s ease-in-out;
 }
-.btn:hover{ background:var(--accent-hover); cursor:pointer }
-.btn.secondary{ background:#e2e8f0; color:#0f172a }
-.btn.ghost{ background:transparent; border:1px solid #cbd5e1; color:#0f172a }
-.btn:disabled{
-  background:#cbd5e1; color:#64748b;
-  border-color:#94a3b8; cursor:not-allowed;
+.btn:hover {
+  background: var(--accent-hover);
+  cursor: pointer;
 }
-.btn.startover{ background-color:#e5e7eb; color:#111; border:1px solid #d1d5db; }
-.btn.startover:hover{ background-color:#d1d5db; }
+.btn.secondary {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+.btn.ghost {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #0f172a;
+}
+.btn:disabled {
+  background: #cbd5e1;
+  color: #64748b;
+  border-color: #94a3b8;
+  cursor: not-allowed;
+}
+.btn.startover {
+  background-color: #e5e7eb;
+  color: #111;
+  border: 1px solid #d1d5db;
+  width: auto;
+  padding: 1rem 1.5rem;
+  border-radius: 18px;
+}
+.btn.startover:hover {
+  background-color: #d1d5db;
+}
 
-/* Cards */
-.card{
-  border:none;
-  border-radius:20px;
-  padding:1.25rem;
-  background:#f8fafc;
+/* ───────────── Cards ───────────── */
+.card {
+  border: none;
+  border-radius: 20px;
+  padding: 1.25rem;
+  background: #f8fafc;
+  margin-bottom: 1.25rem;
+  position: relative;
 }
 .card img {
   max-width: 100%;
@@ -131,16 +214,35 @@ input:focus, textarea:focus, select:focus{
   margin-top: 0.75rem;
 }
 
-/* Messages */
-.msg{ margin-top:.5rem; font-size:1.05rem }
-.msg[role="status"]{ min-height:1.25rem }
-.msg.error{ color:var(--danger) }
-.msg.success{ color:var(--success) }
+/* ───────────── Messages ───────────── */
+.msg {
+  margin-top: 0.5rem;
+  font-size: 1.05rem;
+}
+.msg[role="status"] {
+  min-height: 1.25rem;
+}
+.msg.error {
+  color: var(--danger);
+}
+.msg.success {
+  color: var(--success);
+}
 
-/* Camera */
-.camera{ margin-top:.75rem }
-video{ width:100%; max-height:60vh; border-radius:16px }
-.camera .btn{ font-size:1.25rem; padding:1.5rem 1.3rem; border-radius:22px }
+/* ───────────── Camera & Previews ───────────── */
+.camera {
+  margin-top: 0.75rem;
+}
+video {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: 16px;
+}
+.camera .btn {
+  font-size: 1.25rem;
+  padding: 1.5rem 1.3rem;
+  border-radius: 22px;
+}
 
 /* Image previews */
 .preview {
@@ -150,48 +252,7 @@ video{ width:100%; max-height:60vh; border-radius:16px }
   margin-top: 0.75rem;
 }
 
-/* Spinner */
-.spinner{
-  display:inline-block;
-  width:1.6rem; height:1.6rem;
-  border:4px solid #cbd5e1;
-  border-top-color:var(--accent);
-  border-radius:50%;
-  animation:spin 1s linear infinite;
-}
-@keyframes spin{ to{ transform:rotate(360deg) } }
-
-/* Responsive */
-@media (min-width:420px){
-  :root{ --base:28px; }
-}
-
-/* --- Screen visibility control --- */
-.screen { display: none; }
-.screen.active { display: block; }
-.hidden { display: none !important; }
-
-/* --- New: Side-by-side photo layout --- */
-.photo-row {
-  display: grid;
-  gap: 2rem;
-  grid-template-columns: 1fr 1fr;
-  align-items: start;
-}
-@media (max-width: 680px) {
-  .photo-row {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* --- Optional: smaller centered buttons under previews --- */
-.camera-btn {
-  width: auto;
-  min-width: 200px;
-  margin: 0.75rem auto 0 auto;
-}
-
-/* Side-by-side layout for photo capture steps */
+/* ───────────── Side-by-side photo layout ───────────── */
 .photo-grid {
   display: grid;
   gap: 2rem;
@@ -210,6 +271,95 @@ video{ width:100%; max-height:60vh; border-radius:16px }
 @media (min-width: 700px) {
   .photo-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ───────────── Spinner ───────────── */
+.spinner {
+  display: inline-block;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 4px solid #cbd5e1;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ───────────── Full-screen processing overlay ───────────── */
+.spinner-overlay,
+#processingOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.96);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  font-size: 1.25rem;
+  text-align: center;
+  padding: 2rem;
+}
+.spinner-overlay .spinner,
+#processingOverlay .spinner {
+  width: 3rem;
+  height: 3rem;
+  border-width: 5px;
+  margin-bottom: 1rem;
+}
+
+/* ───────────── Full-screen camera overlay ───────────── */
+.camera-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  z-index: 9998;
+}
+.camera-overlay video {
+  width: 100%;
+  max-width: 900px;
+  border-radius: 12px;
+}
+.camera-overlay .actions {
+  width: 100%;
+  max-width: 900px;
+}
+.camera-overlay .btn.take {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 700;
+}
+.camera-overlay .btn.cancel {
+  background: #e2e8f0;
+  color: #111;
+}
+
+/* ───────────── Screen visibility ───────────── */
+.screen {
+  display: none;
+}
+.screen.active {
+  display: block;
+}
+.hidden {
+  display: none !important;
+}
+
+/* ───────────── Responsive tweaks ───────────── */
+@media (min-width: 420px) {
+  :root {
+    --base: 28px;
   }
 }
 </style>

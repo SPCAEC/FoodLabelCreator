@@ -1,8 +1,81 @@
 <script>
-(function(){
-  const $ = sel => document.querySelector(sel);
-  const $$ = sel => [...document.querySelectorAll(sel)];
+(function () {
+  // ──────────────────────────────────────────────────────────────
+  // Tiny helpers
+  // ──────────────────────────────────────────────────────────────
+  const $  = (sel) => document.querySelector(sel);
+  const $$ = (sel) => [...document.querySelectorAll(sel)];
 
+  const smoothScroll = (el, block = "center") => {
+    if (!el) return;
+    try {
+      el.scrollIntoView({ behavior: "smooth", block });
+    } catch (_) {}
+  };
+
+  const isValidUPC = (v) => /^\d{12}$/.test(String(v || "").trim());
+  const isValidUS  = (v) => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v || ""));
+  const isISO      = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
+
+  const toUS = (val) => {
+    // yyyy-mm-dd  → mm/dd/yyyy
+    if (isISO(val)) {
+      const [y, m, d] = val.split("-");
+      return `${m}/${d}/${y}`;
+    }
+    return val;
+  };
+
+  const autoFormatUS = (raw) => {
+    // user types digits only -> we insert slashes: 02122025 -> 02/12/2025
+    let v = String(raw || "").replace(/\D/g, "").slice(0, 8);
+    if (v.length >= 5) return `${v.slice(0,2)}/${v.slice(2,4)}/${v.slice(4)}`;
+    if (v.length >= 3) return `${v.slice(0,2)}/${v.slice(2)}`;
+    return v;
+  };
+
+  function setMsg(el, text, type) {
+    if (!el) return;
+    el.textContent = text || "";
+    el.className = "msg";
+    if (type) el.classList.add(type);
+  }
+
+  function spinner(on, el) {
+    if (!el) return;
+    el.toggleAttribute("hidden", !on);
+    el.style.display = on ? "inline-block" : "none";
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // Processing overlay (full-screen)
+  // ──────────────────────────────────────────────────────────────
+  let processingEl = null;
+  function showProcessing(msg) {
+    if (!processingEl) {
+      processingEl = document.createElement("div");
+      processingEl.id = "processingOverlay";
+      processingEl.style.cssText = `
+        position:fixed; inset:0; background:rgba(255,255,255,.95);
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        z-index:9999; text-align:center; padding:2rem;
+      `;
+      processingEl.innerHTML = `
+        <div class="spinner" style="width:2.2rem;height:2.2rem;margin-bottom:1rem;"></div>
+        <div id="processingText" style="font-weight:700;"></div>
+      `;
+      document.body.appendChild(processingEl);
+    }
+    processingEl.querySelector('#processingText').textContent = msg || 'Working…';
+    processingEl.style.display = 'flex';
+  }
+  function hideProcessing() {
+    if (processingEl) processingEl.style.display = 'none';
+  }
+
+  // ──────────────────────────────────────────────────────────────
+  // App state
+  // ──────────────────────────────────────────────────────────────
   const state = {
     upc: '',
     item: null,
@@ -12,24 +85,10 @@
     needs: { ingredients: false }
   };
 
-  const isValidUPC = v => /^\d{12}$/.test(String(v || '').trim());
-  const isValidDate = v => /^(0[1-9]|1[0-2])\/(0[1-9]|[12]\d|3[01])\/\d{4}$/.test(String(v || ''));
-
-  function setMsg(el, text, type){
-    if (!el) return;
-    el.textContent = text || '';
-    el.className = 'msg';
-    if (type) el.classList.add(type);
-  }
-
-  function spinner(on, el){
-    if (el) {
-      el.toggleAttribute('hidden', !on);
-      el.style.display = on ? 'inline-block' : 'none';
-    }
-  }
-
-  function navigate(id){
+  // ──────────────────────────────────────────────────────────────
+  // Navigation
+  // ──────────────────────────────────────────────────────────────
+  function navigate(id) {
     $$('.screen').forEach(s => s.classList.remove('active'));
     const el = document.getElementById(id);
     if (el) {
@@ -38,7 +97,7 @@
     }
   }
 
-  function resetApp(){
+  function resetApp() {
     Object.assign(state, {
       upc: '',
       item: null,
@@ -47,42 +106,44 @@
       pdf: { url: '', id: '' },
       needs: { ingredients: false }
     });
-
-    $('#upcInput').value = '';
-    $('#lookupBtn').disabled = true;
+    $('#upcInput')?.value && ($('#upcInput').value = '');
+    $('#lookupBtn')?.setAttribute('disabled','');
     navigate('screenLaunch');
   }
 
-  function wireGlobal(){
+  function wireGlobal() {
     $$('.startOver').forEach(btn => btn.addEventListener('click', resetApp));
   }
 
-  function wireLaunch(){
-    const input = $('#upcInput');
-    const lookupBtn = $('#lookupBtn');
-    const scanBtn = $('#scanBtn');
+  // ──────────────────────────────────────────────────────────────
+  // Launch screen (UPC entry / scan)
+  // ──────────────────────────────────────────────────────────────
+  function wireLaunch() {
+    const input    = $('#upcInput');
+    const lookup   = $('#lookupBtn');
+    const scan     = $('#scanBtn');
     const clearBtn = $('#clearBtn');
-    const status = $('#launchInfo');
-    const load = $('#launchLoad');
+    const status   = $('#launchInfo');
+    const load     = $('#launchLoad');
 
-    function updateBtn(){
-      lookupBtn.disabled = !isValidUPC(input.value);
+    function updateBtn() {
+      lookup.disabled = !isValidUPC(input.value);
     }
 
-    input.addEventListener('input', () => {
+    input?.addEventListener('input', () => {
       input.value = input.value.replace(/\D/g, '').slice(0, 12);
       updateBtn();
     });
 
-    lookupBtn.addEventListener('click', async () => {
-      if (lookupBtn.disabled) return;
+    lookup?.addEventListener('click', async () => {
+      if (lookup.disabled) return;
       state.upc = input.value;
       await doLookup(status, load);
     });
 
-    scanBtn.addEventListener('click', () => {
+    scan?.addEventListener('click', () => {
       setMsg(status, 'Opening scanner…');
-      window.MiniScanner.open();
+      window.MiniScanner?.open?.();
     });
 
     clearBtn?.addEventListener('click', () => {
@@ -95,28 +156,24 @@
     spinner(false, load);
   }
 
-  async function doLookup(statusEl, loadEl){
+  async function doLookup(statusEl, loadEl) {
     setMsg(statusEl, 'Looking up barcode…');
     spinner(true, loadEl);
     try {
-      const raw = await API.lookup(state.upc); // → expected { ok, data: { found, item } }
-      console.log('[RAW LOOKUP RESPONSE]', raw);
-
+      const raw = await API.lookup(state.upc);
       const res = raw?.data || raw;
-      console.log('[API LOOKUP RESPONSE]', res);
 
       if (res && res.found && res.item) {
-        console.log('[LOOKUP MATCH]', res.item);
         state.item = normalizeItem(res.item);
-        state.exp = formatDateFromSheet(res.item.Expiration); // 🆕 preserve expiration
+        state.exp  = formatDateFromSheet(res.item.Expiration);
         navigate('screenReview');
         setTimeout(renderReview, 0);
+        setTimeout(() => smoothScroll($('#screenReview'), 'start'), 50);
       } else {
-        console.log('[LOOKUP NO MATCH]', res);
         state.item = null;
         navigate('screenNew');
+        setTimeout(() => smoothScroll($('#screenNew .card'), 'start'), 50);
       }
-
       setMsg(statusEl, '');
     } catch (err) {
       console.error('[lookup error]', err);
@@ -135,7 +192,7 @@
     try {
       state.upc = upc;
       await doLookup($('#launchInfo'), $('#launchLoad'));
-    } catch (e) {
+    } catch {
       setMsg($('#launchInfo'), 'Scan failed.', 'error');
     }
     spinner(false, $('#launchLoad'));
@@ -145,75 +202,103 @@
     setMsg($('#launchInfo'), 'Scanner closed.');
   });
 
-  function normalizeItem(item){
+  // ──────────────────────────────────────────────────────────────
+  // Item helpers
+  // ──────────────────────────────────────────────────────────────
+  function normalizeItem(item) {
     return {
-      upc: String(item.upc || ''),
-      brand: String(item.brand || ''),
+      upc:         String(item.upc || ''),
+      brand:       String(item.brand || ''),
       productName: String(item.productName || ''),
-      flavor: String(item.flavor || ''),
-      species: String(item.species || ''),
-      lifestage: String(item.lifestage || ''),
+      flavor:      String(item.flavor || ''),
+      species:     String(item.species || ''),
+      lifestage:   String(item.lifestage || ''),
       ingredients: String(item.ingredients || ''),
-      type: String(item.type || item['Treat or Food'] || '')
+      type:        String(item.type || item['Treat or Food'] || 'Food')
     };
   }
 
-  function formatDateFromSheet(date){
+  function formatDateFromSheet(date) {
     try {
       const d = new Date(date);
       const mm = String(d.getMonth() + 1).padStart(2, '0');
       const dd = String(d.getDate()).padStart(2, '0');
       const yyyy = d.getFullYear();
       return `${mm}/${dd}/${yyyy}`;
-    } catch (e) {
+    } catch {
       return '';
     }
   }
 
-  function renderReview(){
+  // ──────────────────────────────────────────────────────────────
+  // Review screen (expiration + details + create label)
+  // ──────────────────────────────────────────────────────────────
+  function renderReview() {
     const i = state.item || {};
-    $('#revExp').value = state.exp || '';
-    $('#revSpecies').value = i.species || 'Dog';
-    $('#revStage').value = i.lifestage || 'Adult';
-    $('#revBrand').value = i.brand || '';
-    $('#revName').value = i.productName || '';
-    $('#revFlavor').value = i.flavor || '';
-    $('#revIngredients').value = i.ingredients || '';
-    $('#revTreatFood').value = i.type || 'Food';
-  }
+    const expEl = $('#revExp');
 
-  function wireReviewScreen(){
-    const saveBtn = $('#revSave');
-    const expInput = $('#revExp');
-    const typeSelect = $('#revTreatFood');
-    const status = $('#revStatus');
-    const load = $('#revLoad');
-
-    function updateSaveBtn(){
-      const exp = expInput.value.trim();
-      const type = typeSelect.value;
-      saveBtn.disabled = !(isValidDate(exp) && (type === 'Food' || type === 'Treat'));
+    // Respect picker (date) but display US
+    if (expEl) {
+      const prefill = state.exp || '';
+      expEl.value = isISO(prefill) ? toUS(prefill) : prefill;
     }
 
-    expInput.addEventListener('input', updateSaveBtn);
-    typeSelect.addEventListener('change', updateSaveBtn);
+    $('#revSpecies').value     = i.species || 'Dog';
+    $('#revStage').value       = i.lifestage || 'Adult';
+    $('#revBrand').value       = i.brand || '';
+    $('#revName').value        = i.productName || '';
+    $('#revFlavor').value      = i.flavor || '';
+    $('#revIngredients').value = i.ingredients || '';
+    $('#revTreatFood').value   = i.type || 'Food';
+  }
 
-    saveBtn.addEventListener('click', async () => {
-      const exp = expInput.value.trim();
+  function wireReviewScreen() {
+    const saveBtn    = $('#revSave');
+    const expInput   = $('#revExp');
+    const typeSelect = $('#revTreatFood');
+    const status     = $('#revStatus');
+    const load       = $('#revLoad');
+
+    const updateSaveBtn = () => {
+      const raw  = expInput.value.trim();
+      const us   = toUS(raw);
       const type = typeSelect.value;
-      if (!exp || !type) return;
+      saveBtn.disabled = !(isValidUS(us) && (type === 'Food' || type === 'Treat'));
+    };
+
+    // allow digits typing without slashes
+    expInput?.addEventListener('input', (e) => {
+      // If the platform is injecting yyyy-mm-dd (rare in text), keep it
+      if (!isISO(e.target.value)) {
+        e.target.value = autoFormatUS(e.target.value);
+      }
+      updateSaveBtn();
+    });
+    // when a native date picker writes back (some Android OEM keyboards),
+    // normalize to US for display and validation
+    expInput?.addEventListener('change', (e) => {
+      e.target.value = toUS(e.target.value);
+      updateSaveBtn();
+    });
+
+    typeSelect?.addEventListener('change', updateSaveBtn);
+
+    saveBtn?.addEventListener('click', async () => {
+      const expRaw = expInput.value.trim();
+      const expUS  = toUS(expRaw);
+      const type   = typeSelect.value;
+      if (!isValidUS(expUS)) return;
 
       Object.assign(state.item, {
-        species: $('#revSpecies').value,
-        lifestage: $('#revStage').value,
-        brand: $('#revBrand').value.trim(),
-        productName: $('#revName').value.trim(),
-        flavor: $('#revFlavor').value.trim(),
-        ingredients: $('#revIngredients').value.trim(),
+        species:    $('#revSpecies').value,
+        lifestage:  $('#revStage').value,
+        brand:      $('#revBrand').value.trim(),
+        productName:$('#revName').value.trim(),
+        flavor:     $('#revFlavor').value.trim(),
+        ingredients:$('#revIngredients').value.trim(),
         type
       });
-
-      state.exp = exp;
+      state.exp = expUS;
 
       setMsg(status, 'Generating label…');
       spinner(true, load);
@@ -223,7 +308,7 @@
         res = await API.createLabels({
           upc: state.upc,
           ...state.item,
-          expiration: exp
+          expiration: expUS
         });
       } catch (err) {
         console.error('[create label error]', err);
@@ -231,8 +316,6 @@
         spinner(false, load);
         return;
       }
-
-      console.log('[LABEL RESPONSE]', res);
 
       if (!res || !res.ok || !res.data || !res.data.pdfUrl) {
         setMsg(status, 'Label creation failed.', 'error');
@@ -243,12 +326,10 @@
       const { pdfUrl, fileId } = res.data;
       state.pdf = { url: pdfUrl, id: fileId };
 
-      // ✅ Open PDF
-      window.open(pdfUrl, '_blank');
-
-      // ✅ Also update UI link
-      const link = document.getElementById('pdfLink');
-      const block = document.getElementById('pdfLinkBlock');
+      // open + show link
+      try { window.open(pdfUrl, '_blank'); } catch {}
+      const link  = $('#pdfLink');
+      const block = $('#pdfLinkBlock');
       if (link && block) {
         link.href = pdfUrl;
         link.textContent = 'View Label PDF';
@@ -256,137 +337,141 @@
       }
 
       spinner(false, load);
-
-      state.pdf = { url: res.pdfUrl, id: res.fileId };
       setMsg(status, 'Label created successfully!', 'success');
-
-      if (link && block) {
-        link.href = res.pdfUrl;
-        link.textContent = 'View Label PDF';
-        block.classList.remove('hidden');
-      }
-
-      try {
-        window.open(res.pdfUrl, '_blank');
-      } catch (err) {
-        console.warn('[open error]', err);
-      }
-
-      spinner(false, load);
     });
 
+    // initial state
     updateSaveBtn();
   }
 
-  function wireNewItem(){
-    const msg = $('#newStatus');
-    const spin = $('#newLoad');
-    const next = $('#photoContinue');
-    const actions = $('#photoActions');
+  // ──────────────────────────────────────────────────────────────
+  // New item photo flow
+  // ──────────────────────────────────────────────────────────────
+  function wireNewItem() {
+    const msg      = $('#newStatus');
+    const spin     = $('#newLoad');
+    const nextBtn  = $('#photoContinue');
+    const actions  = $('#photoActions');
     const ingBlock = $('#ingredientsBlock');
+    const frontBlk = $('#frontBlock');
 
     $('#frontBtn')?.addEventListener('click', () => {
-      captureImage(dataUrl => {
+      // scroll to the area before/while opening the camera overlay
+      smoothScroll(frontBlk);
+      captureImage((dataUrl) => {
         state.photos.front = dataUrl;
-        $('#frontPreview').src = dataUrl;
-        $('#frontPreview').classList.remove('hidden');
+        const img = $('#frontPreview');
+        img.src = dataUrl; img.classList.remove('hidden');
         ingBlock?.classList.remove('hidden');
         checkReady();
+        smoothScroll(ingBlock); // bring step 2 into view next
       });
     });
 
     $('#ingredientsBtn')?.addEventListener('click', () => {
-      captureImage(dataUrl => {
+      smoothScroll(ingBlock);
+      captureImage((dataUrl) => {
         state.photos.ingredients = dataUrl;
-        $('#ingredientsPreview').src = dataUrl;
-        $('#ingredientsPreview').classList.remove('hidden');
+        const img = $('#ingredientsPreview');
+        img.src = dataUrl; img.classList.remove('hidden');
         checkReady();
+        smoothScroll(actions); // bring Continue into view
       });
     });
 
-    next?.addEventListener('click', async () => {
+    nextBtn?.addEventListener('click', async () => {
       const front = state.photos.front;
-      const ing = state.photos.ingredients;
+      const ing   = state.photos.ingredients;
 
       if (!front || !ing || front.length < 100 || ing.length < 100) {
         setMsg(msg, 'Missing or invalid image(s).', 'error');
         return;
       }
 
+      // friendly processing screen
+      showProcessing('ChatGPT is now judging your photography skills… please stand by.');
       setMsg(msg, 'Extracting label data…', 'success');
       spinner(true, spin);
 
       try {
-        const extracted = await API.extract({
-          frontDataUrl: front,
-          ingDataUrl: ing
-        });
-
+        const extracted = await API.extract({ frontDataUrl: front, ingDataUrl: ing });
         if (!extracted?.ok || typeof extracted.data !== 'object') {
           throw new Error('AI extract failed');
         }
 
-        state.item = normalizeItem({
-          upc: state.upc,
-          ...extracted.data
-        });
+        state.item = normalizeItem({ upc: state.upc, ...extracted.data });
 
         navigate('screenReview');
         renderReview();
-
+        setTimeout(() => smoothScroll($('#screenReview'), 'start'), 50);
       } catch (err) {
         console.error('[extract error]', err);
         setMsg(msg, 'AI extraction failed.', 'error');
       } finally {
         spinner(false, spin);
+        hideProcessing();
       }
     });
 
-    function checkReady(){
+    function checkReady() {
       if (state.photos.front && state.photos.ingredients) {
         actions?.classList.remove('hidden');
       }
     }
   }
 
-  function captureImage(callback){
+  // Camera overlay (full screen)
+  function captureImage(callback) {
     const overlay = document.createElement('div');
     overlay.className = 'camera-overlay';
+    overlay.style.cssText = `
+      position:fixed; inset:0; background:#000; z-index:9998;
+      display:flex; flex-direction:column; justify-content:center; align-items:center; gap:1rem; padding:1rem;
+    `;
     overlay.innerHTML = `
-      <video autoplay playsinline></video>
-      <button class="btn take">Take Photo</button>
-      <button class="btn secondary cancel">Cancel</button>
+      <video autoplay playsinline style="width:100%; max-width:900px; border-radius:12px;"></video>
+      <div class="actions" style="width:100%; max-width:900px;">
+        <button class="btn take">📸 Take Photo</button>
+        <button class="btn secondary cancel">Cancel</button>
+      </div>
     `;
     document.body.appendChild(overlay);
 
-    const video = overlay.querySelector('video');
-    const take = overlay.querySelector('.take');
+    const video  = overlay.querySelector('video');
+    const take   = overlay.querySelector('.take');
     const cancel = overlay.querySelector('.cancel');
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }).then(stream => {
-      video.srcObject = stream;
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+      .then((stream) => {
+        video.srcObject = stream;
 
-      take.onclick = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0);
-        const url = canvas.toDataURL('image/jpeg');
-        stream.getTracks().forEach(track => track.stop());
-        overlay.remove();
-        callback(url);
-      };
+        const cleanup = () => {
+          try { stream.getTracks().forEach(t => t.stop()); } catch {}
+          overlay.remove();
+        };
 
-      cancel.onclick = () => {
-        stream.getTracks().forEach(track => track.stop());
+        take.onclick = () => {
+          const canvas = document.createElement('canvas');
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          canvas.getContext('2d').drawImage(video, 0, 0);
+          const url = canvas.toDataURL('image/jpeg', 0.92);
+          cleanup();
+          callback(url);
+        };
+
+        cancel.onclick = cleanup;
+      })
+      .catch((err) => {
+        console.error('[camera error]', err);
         overlay.remove();
-      };
-    }).catch(err => {
-      console.error('[camera error]', err);
-      setMsg($('#newStatus'), 'Camera not available', 'error');
-    });
+        setMsg($('#newStatus'), 'Camera not available', 'error');
+      });
   }
 
+  // ──────────────────────────────────────────────────────────────
+  // Boot
+  // ──────────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     wireGlobal();
     wireLaunch();
