@@ -42,10 +42,19 @@ function findRowByKey_(sheetKey) {
   if (!col) throw new Error('Header "UPC" not found.');
   const target = String(sheetKey || '').trim();
 
+  console.log(`[FIND] Searching for ${target} in ${data.length - 1} rows…`);
+
+  const candidates = [];
   for (let r = 2; r <= data.length; r++) {
     const val = String(data[r - 1][col - 1] || '').trim();
-    if (val === target) return r;
+    candidates.push(val);
+    if (val === target) {
+      console.log(`[FIND] ✅ MATCH FOUND on row ${r}: ${val}`);
+      return r;
+    }
   }
+
+  console.log(`[FIND] ❌ No match for ${target}. Sample of first 5:`, candidates.slice(0, 5));
   return -1;
 }
 
@@ -157,4 +166,11 @@ function findRowByKeyOrLegacy_(upcRaw) {
     if (legacy === upc12) return r;
   }
   return -1;
+}
+function testFind() {
+  const testUPC = '017800100335'; // any real one you have
+  const key = toSheetKey_(testUPC);
+  const row = findRowByKey_(key);
+  Logger.log('Test key: ' + key);
+  Logger.log('Found row: ' + row);
 }
