@@ -49,10 +49,10 @@
     lookup(raw) {
       const upc = normalizeUPC(raw);
       if (upc.length !== 12) {
-        // Keep client behavior predictable
         return Promise.resolve({ found: false, reason: 'invalid_length', sent: upc });
       }
-      return _gsr('apiLookup', { upc });
+      return _gsr('apiLookup', { upc })
+        .then(res => (res && typeof res === 'object' && 'data' in res ? res.data : res));
     },
 
     /**
