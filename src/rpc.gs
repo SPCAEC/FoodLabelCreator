@@ -20,17 +20,6 @@ function rpcTry(fn) {
   }
 }
 
-/* ---------- Helpers ---------- */
-function normalizeUPC12_(value) {
-  let s = String(value || '').replace(/\D/g, '');
-  if (s.length === 13 && s.startsWith('0')) s = s.slice(1);
-  if (s.length > 13) return '';
-  if (s.length < 12) s = s.padStart(12, '0');
-  return s.length === 12 ? s : '';
-}
-const toSheetKey_ = upc => (upc ? `PFP${upc}` : '');
-const fromSheetKey_ = key => String(key || '').replace(/^PFP/, '');
-
 /* ---------- Core lookup ---------- */
 function apiLookup(payload) {
   const raw = (payload && typeof payload === 'object' && 'upc' in payload)
