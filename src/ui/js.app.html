@@ -191,6 +191,7 @@
 
     try {
       const raw = await API.lookup(state.upc);
+      console.log('[LOOKUP RAW]', JSON.stringify(raw, null, 2));
       const res = raw?.data || raw;
 
       if (res && res.found && res.item) {
