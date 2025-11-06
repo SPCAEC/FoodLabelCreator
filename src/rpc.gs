@@ -86,30 +86,53 @@ function apiLookup(payload) {
   return rpcTry(() => {
     const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
     const upc12 = normalizeUPC12_(raw);
+    const key = toSheetKey_(upc12);
 
-    console.log('[LOOKUP]', { raw, normalized: upc12 });
+    console.log(`[LOOKUP] Searching for key: ${key}`);
 
-    if (!upc12) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
+    // Try exact PFP match first
+    let record = readByKey(key);
 
-    const row = findByKeyInSheet_(toSheetKey_(upc12)); // << key-based search
-    if (!row) return { found: false, upc: upc12 };
+    // If not found, check for legacy unprefixed UPCs
+    if (!record) {
+      console.log('[LOOKUP] No PFP match, checking legacy rows...');
+      const legacyRowNum = findRowByKeyOrLegacy_(upc12);
+      if (legacyRowNum !== -1) {
+        console.log(`[LOOKUP] ✅ Found legacy row ${legacyRowNum}, upgrading to key.`);
+        const sh = sh_();
+        const h = getHeaders_();
+        const rowVals = sh.getRange(legacyRowNum, 1, 1, sh.getLastColumn()).getValues()[0];
+        const rec = {};
+        Object.keys(h).forEach(head => rec[head] = rowVals[h[head] - 1]);
+        record = rec;
+      }
+    }
 
-    // Return UI-friendly item; keep the raw key if you want (optional)
+    // Nothing found
+    if (!record) {
+      console.log(`[LOOKUP] ❌ Not found for ${key}`);
+      return { found: false, upc: upc12, key, reason: 'not_found' };
+    }
+
+    // Normalize structure for frontend
     const item = {
-      upc: fromSheetKey_(row.UPC), // strip PFP for UI
-      species: String(row.Species || ''),
-      lifestage: String(row.Lifestage || ''),
-      brand: String(row.Brand || ''),
-      productName: String(row.ProductName || ''),
-      flavor: String(row['Recipe or Flavor'] || ''),
-      type: String(row['Treat or Food'] || ''),
-      ingredients: String(row.Ingredients || ''),
-      expiration: row.Expiration || '',
-      pdfFileId: row.pdfFileId || row['PDF File ID'] || '',
-      pdfUrl: row.pdfUrl || row['PDF URL'] || ''
+      upc: upc12,
+      upcKey: key,
+      species: record.Species || '',
+      lifestage: record.Lifestage || '',
+      brand: record.Brand || '',
+      productName: record.ProductName || '',
+      flavor: record['Recipe or Flavor'] || '',
+      type: record['Treat or Food'] || '',
+      ingredients: record.Ingredients || '',
+      expiration: record.Expiration || '',
+      pdfFileId: record['PDF File ID'] || '',
+      pdfUrl: record['PDF URL'] || ''
     };
 
-    return { found: true, upc: upc12, item };
+    console.log(`[LOOKUP] ✅ Found record for ${key}`, item);
+
+    return { found: true, upc: upc12, key, item };
   });
 }
 
