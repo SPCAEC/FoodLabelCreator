@@ -25,13 +25,18 @@ function rpcTry(fn) {
 /**
  * Normalize to 12-digit UPC-A safely from any value type.
  */
-function normalizeUPC_(value) {
-  let s = String(value == null ? '' : value).replace(/\D/g, '');
-  if (s.length === 13 && s.startsWith('0')) s = s.slice(1);
+/** Normalize to 12-digit UPC-A */
+function normalizeUPC12_(value) {
+  let s = String(value || '').replace(/\D/g, '');
+  if (s.length === 13 && s.startsWith('0')) s = s.slice(1); // EAN-13 -> UPC-A
   if (s.length > 13) return '';
-  if (s.length < 12 && s.length > 0) s = s.padStart(12, '0');
+  if (s.length < 12) s = s.padStart(12, '0');
   return s.length === 12 ? s : '';
 }
+
+/** Build/parse the sheet key that avoids numeric coercion */
+function toSheetKey_(upc12) { return 'PFP' + upc12; }
+function fromSheetKey_(key)  { return String(key || '').replace(/^PFP/, ''); }
 
 /**
  * Get configured sheet.
@@ -79,23 +84,19 @@ function findByUPCInSheet_(upc12) {
  */
 function apiLookup(payload) {
   return rpcTry(() => {
-    const raw = (payload && typeof payload === 'object' && 'upc' in payload)
-      ? payload.upc
-      : payload;
+    const raw = (payload && typeof payload === 'object' && 'upc' in payload) ? payload.upc : payload;
+    const upc12 = normalizeUPC12_(raw);
 
-    const upc = normalizeUPC_(raw);
-    console.log('[LOOKUP REQUEST]', { raw, normalized: upc });
+    console.log('[LOOKUP]', { raw, normalized: upc12 });
 
-    if (!upc) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
+    if (!upc12) return { found: false, reason: 'invalid_length', sent: String(raw || '') };
 
-    const row = findByUPCInSheet_(upc);
-    if (!row) {
-      console.log('[LOOKUP RESULT] Not found', upc);
-      return { found: false, upc };
-    }
+    const row = findByKeyInSheet_(toSheetKey_(upc12)); // << key-based search
+    if (!row) return { found: false, upc: upc12 };
 
+    // Return UI-friendly item; keep the raw key if you want (optional)
     const item = {
-      upc,
+      upc: fromSheetKey_(row.UPC), // strip PFP for UI
       species: String(row.Species || ''),
       lifestage: String(row.Lifestage || ''),
       brand: String(row.Brand || ''),
@@ -104,12 +105,11 @@ function apiLookup(payload) {
       type: String(row['Treat or Food'] || ''),
       ingredients: String(row.Ingredients || ''),
       expiration: row.Expiration || '',
-      pdfFileId: row.pdfFileId || '',
-      pdfUrl: row.pdfUrl || ''
+      pdfFileId: row.pdfFileId || row['PDF File ID'] || '',
+      pdfUrl: row.pdfUrl || row['PDF URL'] || ''
     };
 
-    console.log('[LOOKUP RESULT] Found match', item);
-    return { found: true, upc, item };
+    return { found: true, upc: upc12, item };
   });
 }
 
@@ -119,13 +119,14 @@ function apiLookup(payload) {
 function apiCreateLabels(payload) {
   return rpcTry(() => {
     if (!payload) throw new Error('Missing payload');
-    const upc = normalizeUPC_(payload.upc);
-    if (!upc) throw new Error('Invalid UPC');
+
+    const upc12 = normalizeUPC12_(payload.upc);
+    if (!upc12) throw new Error('Invalid UPC');
 
     const pdf = generateLabelPDF_(payload);
 
     const record = {
-      UPC: upc,
+      UPC: toSheetKey_(upc12),                                  // << store as PFP############
       Species: payload.species || payload.Species || '',
       Lifestage: payload.lifestage || payload.Lifestage || 'Adult',
       Brand: payload.brand || payload.Brand || '',
@@ -134,23 +135,18 @@ function apiCreateLabels(payload) {
       'Treat or Food': payload.type || payload['Treat or Food'] || 'Food',
       Ingredients: payload.ingredients || payload.Ingredients || '',
       Expiration: payload.expiration || '',
-      CreatedAt: new Date().toISOString(),
-      UpdatedAt: new Date().toISOString(),
-      pdfFileId: pdf.fileId,
-      pdfUrl: pdf.url
+      Created At: new Date().toISOString(),
+      Updated At: new Date().toISOString(),
+      'PDF File ID': pdf.fileId,
+      'PDF URL': pdf.url
     };
 
-    console.log('[UPSERT RECORD]', JSON.stringify(record, null, 2));
+    console.log('[RECORD TO UPSERT]', JSON.stringify(record, null, 2));
 
     const row = upsertRecord(record);
-    console.log('[UPSERT RESULT]', row);
+    console.log('[UPSERTED ROW]', row);
 
-    return {
-      ok: true,
-      pdfUrl: pdf.url,
-      fileId: pdf.fileId,
-      row
-    };
+    return { ok: true, pdfUrl: pdf.url, fileId: pdf.fileId, row };
   });
 }
 
