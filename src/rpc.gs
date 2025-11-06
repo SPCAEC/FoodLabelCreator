@@ -46,9 +46,6 @@ function getSheet_() {
   return sh;
 }
 
-/**
- * Find a row in the Sheet by normalized UPC.
- */
 function findByUPCInSheet_(upc12) {
   const sh = getSheet_();
   const values = sh.getDataRange().getValues();
@@ -58,20 +55,20 @@ function findByUPCInSheet_(upc12) {
   const idxUPC = headers.indexOf('UPC');
   if (idxUPC === -1) throw new Error('Header missing: UPC');
 
-  let match = null;
+  const quoted = `'${upc12}`;
   for (let r = 1; r < values.length; r++) {
-    const cell = values[r][idxUPC];
-    const norm = normalizeUPC_(cell);
-    if (norm === upc12) {
-      match = {};
-      headers.forEach((h, i) => (match[h] = values[r][i]));
+    const raw = String(values[r][idxUPC] || '').trim();
+    const norm = normalizeUPC_(raw.replace(/^'/, '')); // remove quote for normalization
+    if (norm === upc12 || raw === quoted) {
+      const rec = {};
+      headers.forEach((h, i) => (rec[h] = values[r][i]));
       console.log(`[MATCH FOUND] Row ${r + 1}: ${upc12}`);
-      break;
+      return rec;
     }
   }
 
-  if (!match) console.log(`[NO MATCH] ${upc12}`);
-  return match;
+  console.log(`[NO MATCH] ${upc12}`);
+  return null;
 }
 
 /* ---------- Public APIs ---------- */
