@@ -116,38 +116,66 @@ function apiLookup(payload) {
 /**
  * Create labels + save or upsert row.
  */
-function apiCreateLabels(payload) {
-  return rpcTry(() => {
-    if (!payload) throw new Error('Missing payload');
+function upsertRecord(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('upsertRecord: missing or invalid payload');
+  }
 
-    const upc12 = normalizeUPC12_(payload.upc);
-    if (!upc12) throw new Error('Invalid UPC');
+  // Normalize and validate key
+  const upc12 = normalizeUPC12_(payload.UPC || payload.upc || '');
+  const sheetKey = /^PFP\d{12}$/.test(payload.UPC)
+    ? payload.UPC
+    : toSheetKey_(upc12);
 
-    const pdf = generateLabelPDF_(payload);
+  if (!/^PFP\d{12}$/.test(sheetKey)) {
+    throw new Error('upsertRecord: invalid key — must be PFP + 12 digits');
+  }
 
-    const record = {
-      UPC: toSheetKey_(upc12),                                  // << store as PFP############
-      Species: payload.species || payload.Species || '',
-      Lifestage: payload.lifestage || payload.Lifestage || 'Adult',
-      Brand: payload.brand || payload.Brand || '',
-      ProductName: payload.productName || payload.ProductName || '',
-      'Recipe or Flavor': payload.flavor || payload.Flavor || '',
-      'Treat or Food': payload.type || payload['Treat or Food'] || 'Food',
-      Ingredients: payload.ingredients || payload.Ingredients || '',
-      Expiration: payload.expiration || '',
-      Created At: new Date().toISOString(),
-      Updated At: new Date().toISOString(),
-      'PDF File ID': pdf.fileId,
-      'PDF URL': pdf.url
-    };
+  const sh = sh_();
+  const h = getHeaders_();
+  const now = new Date();
+  const r = findRowByKey_(sheetKey);
 
-    console.log('[RECORD TO UPSERT]', JSON.stringify(record, null, 2));
+  const headersOrdered = Object.keys(h).sort((a, b) => h[a] - h[b]);
+  console.log('[UPSERT] key=%s row=%s', sheetKey, r === -1 ? 'new' : r);
 
-    const row = upsertRecord(record);
-    console.log('[UPSERTED ROW]', row);
-
-    return { ok: true, pdfUrl: pdf.url, fileId: pdf.fileId, row };
+  const rowVals = headersOrdered.map(head => {
+    switch (head) {
+      case 'UPC': return sheetKey;
+      case 'Species': return payload.Species || payload.species || '';
+      case 'Lifestage': return payload.Lifestage || payload.lifestage || 'Adult';
+      case 'Brand': return payload.Brand || payload.brand || '';
+      case 'ProductName': return payload.ProductName || payload.productName || '';
+      case 'Recipe or Flavor': return payload['Recipe or Flavor'] || payload.flavor || '';
+      case 'Treat or Food': return payload['Treat or Food'] || payload.type || 'Food';
+      case 'Ingredients': return payload.Ingredients || payload.ingredients || '';
+      case 'Expiration': return payload.Expiration || payload.expiration || '';
+      case 'PDF File ID': return payload['PDF File ID'] || payload.pdfFileId || '';
+      case 'PDF URL': return payload['PDF URL'] || payload.pdfUrl || '';
+      case 'Front Photo ID': return payload['Front Photo ID'] || payload.frontPhotoId || '';
+      case 'Ingredients Photo ID': return payload['Ingredients Photo ID'] || payload.ingPhotoId || '';
+      case 'Created At':
+      case 'CreatedAt':
+        if (r === -1) return now;
+        const prev = readByKey(sheetKey)?.createdAt;
+        return prev || now;
+      case 'Updated At':
+      case 'UpdatedAt':
+        return now;
+      default:
+        return '';
+    }
   });
+
+  if (r === -1) {
+    sh.appendRow(rowVals);
+    console.log('[UPSERT] appended new row');
+    return sh.getLastRow();
+  } else {
+    sh.getRange(r, 1, 1, rowVals.length).setValues([rowVals]);
+    console.log('[UPSERT] updated existing row', r);
+    return r;
+  }
 }
 
 function apiSaveAndCreateLabel(payload) {
