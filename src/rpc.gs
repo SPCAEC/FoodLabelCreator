@@ -1,6 +1,9 @@
 /** ---------------------------------------------------------------------------
  * Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration)
- * Fixed Nov 2025 — Ensures all RPCs return to client correctly (no nulls)
+ * Unified version — Nov 2025
+ * ✅ Ensures all RPCs return serialized objects (no nulls)
+ * ✅ Merges lookup + wrapper into one exported function
+ * ✅ Fully aligned with PFP-prefixed UPC key model
  * ---------------------------------------------------------------------------
  */
 
@@ -14,64 +17,61 @@ function rpcTry(fn) {
       level: 'error',
       msg: 'rpc error',
       error: err.toString(),
-      stack: err.stack
+      stack: err.stack,
     });
     return { ok: false, error: err.toString() };
   }
 }
 
-/* ---------- Core lookup ---------- */
+/* ---------- Core Lookup (wrapped + exported) ---------- */
 function apiLookup(payload) {
-  const raw = (payload && typeof payload === 'object' && 'upc' in payload)
-    ? payload.upc
-    : payload;
+  return rpcTry(() => {
+    const raw =
+      payload && typeof payload === 'object' && 'upc' in payload
+        ? payload.upc
+        : payload;
 
-  const upc12 = normalizeUPC12_(raw);
-  const key = toSheetKey_(upc12);
+    const upc12 = normalizeUPC12_(raw);
+    const key = toSheetKey_(upc12);
+    console.log(`[LOOKUP] Searching for ${key} (raw=${raw})`);
 
-  console.log(`[LOOKUP] Searching for ${key} (raw=${raw})`);
+    // Try PFP-prefixed key first
+    const record = readByKey(key);
+    if (record) {
+      console.log(`[LOOKUP] ✅ Found record for ${key}`);
+      return { found: true, upc: upc12, key, item: record };
+    }
 
-  const record = readByKey(key);
-  if (record) {
-    console.log(`[LOOKUP] ✅ Found record for ${key}`);
-    return { found: true, upc: upc12, key, item: record };
-  }
+    // Fallback: legacy 12-digit UPCs
+    const legacyRow = findRowByKeyOrLegacy_(upc12);
+    if (legacyRow !== -1) {
+      console.log(`[LOOKUP] Found legacy row ${legacyRow}.`);
+      const sh = sh_();
+      const h = getHeaders_();
+      const rowVals = sh
+        .getRange(legacyRow, 1, 1, sh.getLastColumn())
+        .getValues()[0];
+      const val = (k) => rowVals[h[k] - 1] ?? '';
+      const recordLegacy = {
+        upcKey: val('UPC'),
+        upc: fromSheetKey_(val('UPC')),
+        species: val('Species'),
+        lifestage: val('Lifestage'),
+        brand: val('Brand'),
+        productName: val('ProductName'),
+        flavor: val('Recipe or Flavor'),
+        type: val('Treat or Food'),
+        ingredients: val('Ingredients'),
+        expiration: val('Expiration'),
+        pdfFileId: val('PDF File ID'),
+        pdfUrl: val('PDF URL'),
+      };
+      return { found: true, upc: upc12, key, item: recordLegacy };
+    }
 
-  // fallback to legacy 12-digit rows
-  const legacyRow = findRowByKeyOrLegacy_(upc12);
-  if (legacyRow !== -1) {
-    console.log(`[LOOKUP] Found legacy row ${legacyRow}.`);
-    const sh = sh_();
-    const h = getHeaders_();
-    const rowVals = sh.getRange(legacyRow, 1, 1, sh.getLastColumn()).getValues()[0];
-    const val = k => rowVals[h[k] - 1] ?? '';
-    const recordLegacy = {
-      upcKey: val('UPC'),
-      upc: fromSheetKey_(val('UPC')),
-      species: val('Species'),
-      lifestage: val('Lifestage'),
-      brand: val('Brand'),
-      productName: val('ProductName'),
-      flavor: val('Recipe or Flavor'),
-      type: val('Treat or Food'),
-      ingredients: val('Ingredients'),
-      expiration: val('Expiration'),
-      pdfFileId: val('PDF File ID'),
-      pdfUrl: val('PDF URL')
-    };
-    return { found: true, upc: upc12, key, item: recordLegacy };
-  }
-
-  console.log(`[LOOKUP] ❌ No record found for ${key}`);
-  return { found: false, upc: upc12, key, reason: 'not_found' };
-}
-
-/* ---------- Wrapper to expose cleanly ---------- */
-function apiLookupWrapped(payload) {
-  console.log('[apiLookupWrapped] payload', JSON.stringify(payload));
-  const result = rpcTry(() => apiLookup(payload));
-  console.log('[apiLookupWrapped] result', JSON.stringify(result));
-  return result;
+    console.log(`[LOOKUP] ❌ No record found for ${key}`);
+    return { found: false, upc: upc12, key, reason: 'not_found' };
+  });
 }
 
 /* ---------- Create / Save ---------- */
@@ -95,10 +95,11 @@ function apiCreateLabels(payload) {
       CreatedAt: new Date().toISOString(),
       UpdatedAt: new Date().toISOString(),
       pdfFileId: pdf.fileId,
-      pdfUrl: pdf.url
+      pdfUrl: pdf.url,
     };
 
     const row = upsertRecord(record);
+    console.log(`[CREATE LABEL] Saved record for ${key} on row ${row}`);
     return { ok: true, pdfUrl: pdf.url, fileId: pdf.fileId, row };
   });
 }
