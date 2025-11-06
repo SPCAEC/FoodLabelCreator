@@ -1,6 +1,6 @@
 /** ---------------------------------------------------------------------------
  * Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration)
- * Updated to ensure robust UPC normalization + correct lookup matching
+ * Synced with November 2025 sheets.repo.gs (PFP-prefixed UPC model)
  * ---------------------------------------------------------------------------
  */
 
@@ -20,67 +20,26 @@ function rpcTry(fn) {
   }
 }
 
-/* ---------- Helpers ---------- */
+/* ---------- Local helpers (for normalization only) ---------- */
 
-/**
- * Normalize to 12-digit UPC-A safely from any value type.
- */
-/** Normalize to 12-digit UPC-A */
+/** Normalize any input to 12-digit UPC-A */
 function normalizeUPC12_(value) {
   let s = String(value || '').replace(/\D/g, '');
-  if (s.length === 13 && s.startsWith('0')) s = s.slice(1); // EAN-13 -> UPC-A
+  if (s.length === 13 && s.startsWith('0')) s = s.slice(1);
   if (s.length > 13) return '';
   if (s.length < 12) s = s.padStart(12, '0');
   return s.length === 12 ? s : '';
 }
 
-/** Build/parse the sheet key that avoids numeric coercion */
+/** Sheet key helpers (match sheets.repo.gs) */
 function toSheetKey_(upc12) { return 'PFP' + upc12; }
-function fromSheetKey_(key)  { return String(key || '').replace(/^PFP/, ''); }
-
-/**
- * Get configured sheet.
- */
-function getSheet_() {
-  const props = PropertiesService.getScriptProperties();
-  const sheetId = props.getProperty('SHEET_ID') || '';
-  const sheetName = props.getProperty('SHEET_NAME') || 'Products';
-  const ss = sheetId ? SpreadsheetApp.openById(sheetId) : SpreadsheetApp.getActive();
-  const sh = ss.getSheetByName(sheetName);
-  if (!sh) throw new Error(`Sheet not found: ${sheetName}`);
-  return sh;
-}
-
-function findByUPCInSheet_(upc12) {
-  const sh = getSheet_();
-  const values = sh.getDataRange().getValues();
-  if (values.length < 2) return null;
-
-  const headers = values[0].map(h => String(h).trim());
-  const idxUPC = headers.indexOf('UPC');
-  if (idxUPC === -1) throw new Error('Header missing: UPC');
-
-  const quoted = `'${upc12}`;
-  for (let r = 1; r < values.length; r++) {
-    const raw = String(values[r][idxUPC] || '').trim();
-    const norm = normalizeUPC_(raw.replace(/^'/, '')); // remove quote for normalization
-    if (norm === upc12 || raw === quoted) {
-      const rec = {};
-      headers.forEach((h, i) => (rec[h] = values[r][i]));
-      console.log(`[MATCH FOUND] Row ${r + 1}: ${upc12}`);
-      return rec;
-    }
-  }
-
-  console.log(`[NO MATCH] ${upc12}`);
-  return null;
-}
+function fromSheetKey_(key) { return String(key || '').replace(/^PFP/, ''); }
 
 /* ---------- Public APIs ---------- */
 
 /**
  * Lookup product info by UPC.
- * Returns { ok:true, data:{ found:boolean, upc:string, item:Object|null } }
+ * Returns { ok:true, data:{ found:boolean, upc:string, key:string, item:Object|null } }
  */
 function apiLookup(payload) {
   return rpcTry(() => {
@@ -93,14 +52,14 @@ function apiLookup(payload) {
 
     console.log(`[LOOKUP] Searching for ${key} (raw=${raw})`);
 
-    // First try prefixed key
+    // First try PFP-prefixed row
     let record = readByKey(key);
 
-    // If not found, try legacy row
+    // If not found, try legacy plain UPC
     if (!record) {
       const legacyRow = findRowByKeyOrLegacy_(upc12);
       if (legacyRow !== -1) {
-        console.log(`[LOOKUP] Found legacy row ${legacyRow}.`);
+        console.log(`[LOOKUP] Found legacy row ${legacyRow}`);
         const sh = sh_();
         const h = getHeaders_();
         const rowVals = sh.getRange(legacyRow, 1, 1, sh.getLastColumn()).getValues()[0];
@@ -122,110 +81,92 @@ function apiLookup(payload) {
       }
     }
 
-    // Still nothing
     if (!record) {
       console.log(`[LOOKUP] ❌ No record found for ${key}`);
       return { found: false, upc: upc12, key, reason: 'not_found' };
     }
 
-    console.log(`[LOOKUP] ✅ Found record for ${key}`, record);
-
-    return {
-      found: true,
-      upc: upc12,
-      key,
-      item: record
-    };
+    console.log(`[LOOKUP] ✅ Found record for ${key}`);
+    return { found: true, upc: upc12, key, item: record };
   });
 }
 
 /**
- * Create labels + save or upsert row.
+ * Create label(s) and upsert the record with PFP-prefixed key.
+ * Returns PDF URL and file ID.
  */
-function upsertRecord(payload) {
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('upsertRecord: missing or invalid payload');
-  }
+function apiCreateLabels(payload) {
+  return rpcTry(() => {
+    if (!payload) throw new Error('Missing payload');
 
-  // Normalize and validate key
-  const upc12 = normalizeUPC12_(payload.UPC || payload.upc || '');
-  const sheetKey = /^PFP\d{12}$/.test(payload.UPC)
-    ? payload.UPC
-    : toSheetKey_(upc12);
+    const upc12 = normalizeUPC12_(payload.upc);
+    const key = toSheetKey_(upc12);
+    const pdf = generateLabelPDF_(payload);
 
-  if (!/^PFP\d{12}$/.test(sheetKey)) {
-    throw new Error('upsertRecord: invalid key — must be PFP + 12 digits');
-  }
+    const record = {
+      UPC: key,
+      Species: payload.species || '',
+      Lifestage: payload.lifestage || 'Adult',
+      Brand: payload.brand || '',
+      ProductName: payload.productName || '',
+      'Recipe or Flavor': payload.flavor || '',
+      'Treat or Food': payload.type || 'Food',
+      Ingredients: payload.ingredients || '',
+      Expiration: payload.expiration || '',
+      'PDF File ID': pdf.fileId,
+      'PDF URL': pdf.url,
+      CreatedAt: new Date().toISOString(),
+      UpdatedAt: new Date().toISOString()
+    };
 
-  const sh = sh_();
-  const h = getHeaders_();
-  const now = new Date();
-  const r = findRowByKey_(sheetKey);
+    console.log(`[UPSERT] Writing record ${key}`);
+    const row = upsertRecord(record);
 
-  const headersOrdered = Object.keys(h).sort((a, b) => h[a] - h[b]);
-  console.log('[UPSERT] key=%s row=%s', sheetKey, r === -1 ? 'new' : r);
-
-  const rowVals = headersOrdered.map(head => {
-    switch (head) {
-      case 'UPC': return sheetKey;
-      case 'Species': return payload.Species || payload.species || '';
-      case 'Lifestage': return payload.Lifestage || payload.lifestage || 'Adult';
-      case 'Brand': return payload.Brand || payload.brand || '';
-      case 'ProductName': return payload.ProductName || payload.productName || '';
-      case 'Recipe or Flavor': return payload['Recipe or Flavor'] || payload.flavor || '';
-      case 'Treat or Food': return payload['Treat or Food'] || payload.type || 'Food';
-      case 'Ingredients': return payload.Ingredients || payload.ingredients || '';
-      case 'Expiration': return payload.Expiration || payload.expiration || '';
-      case 'PDF File ID': return payload['PDF File ID'] || payload.pdfFileId || '';
-      case 'PDF URL': return payload['PDF URL'] || payload.pdfUrl || '';
-      case 'Front Photo ID': return payload['Front Photo ID'] || payload.frontPhotoId || '';
-      case 'Ingredients Photo ID': return payload['Ingredients Photo ID'] || payload.ingPhotoId || '';
-      case 'Created At':
-      case 'CreatedAt':
-        if (r === -1) return now;
-        const prev = readByKey(sheetKey)?.createdAt;
-        return prev || now;
-      case 'Updated At':
-      case 'UpdatedAt':
-        return now;
-      default:
-        return '';
-    }
+    return {
+      ok: true,
+      upc: upc12,
+      key,
+      pdfUrl: pdf.url,
+      fileId: pdf.fileId,
+      row
+    };
   });
-
-  if (r === -1) {
-    sh.appendRow(rowVals);
-    console.log('[UPSERT] appended new row');
-    return sh.getLastRow();
-  } else {
-    sh.getRange(r, 1, 1, rowVals.length).setValues([rowVals]);
-    console.log('[UPSERT] updated existing row', r);
-    return r;
-  }
 }
 
+/** Alias kept for legacy frontends */
 function apiSaveAndCreateLabel(payload) {
   return apiCreateLabels(payload);
 }
 
+/**
+ * Upload product front image
+ */
 function apiUploadFront(upc, dataUrl) {
   return rpcTry(() => {
-    const norm = normalizeUPC_(upc);
-    if (!norm || !dataUrl) throw new Error('Missing image or UPC');
-    const file = saveImage_(norm, dataUrl, 'front');
+    const upc12 = normalizeUPC12_(upc);
+    const key = toSheetKey_(upc12);
+    if (!key || !dataUrl) throw new Error('Missing image or UPC');
+    const file = saveImage_(key, dataUrl, 'front');
     return { file };
   });
 }
 
+/**
+ * Upload ingredients image
+ */
 function apiUploadIngredients(upc, dataUrl) {
   return rpcTry(() => {
-    const norm = normalizeUPC_(upc);
-    if (!norm || !dataUrl) throw new Error('Missing image or UPC');
-    const file = saveImage_(norm, dataUrl, 'ingredients');
+    const upc12 = normalizeUPC12_(upc);
+    const key = toSheetKey_(upc12);
+    if (!key || !dataUrl) throw new Error('Missing image or UPC');
+    const file = saveImage_(key, dataUrl, 'ingredients');
     return { file };
   });
 }
 
+/**
+ * Extract label text using OpenAI from front/ingredients images.
+ */
 function apiExtractFromImages(payload) {
   return rpcTry(() => {
     const front = payload?.front;
