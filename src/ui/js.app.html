@@ -200,8 +200,8 @@
   }
 
   async function doLookup(statusEl, loadEl) {
-    setMsg(statusEl, 'Looking up barcode…');
-    spinner(true, loadEl);
+    // Show full-screen overlay during lookup
+    showProcessing('Searching for answers among the stars…');
 
     try {
       const raw = await API.lookup(state.upc);
@@ -244,6 +244,7 @@
       setMsg(statusEl, 'Lookup failed. Please try again.', 'error');
     } finally {
       spinner(false, loadEl);
+      hideProcessing();
     }
   }
 
@@ -312,6 +313,14 @@
     $('#revFlavor').value      = i.flavor || '';
     $('#revIngredients').value = i.ingredients || '';
     $('#revTreatFood').value   = i.type || 'Food';
+    // Always hide any prior label info until a new one is generated
+    state.pdf = { url: '', id: '' };
+    const pdfBlock = document.querySelector('#pdfLinkBlock');
+    const pdfLink = document.querySelector('#pdfLink');
+    const revStatus = document.querySelector('#revStatus');
+    if (pdfBlock) pdfBlock.classList.add('hidden');
+    if (pdfLink) pdfLink.href = '#';
+    if (revStatus) revStatus.textContent = '';
   }
 
   function wireReviewScreen() {
