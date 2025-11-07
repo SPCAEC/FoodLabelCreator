@@ -49,25 +49,22 @@
 
 <body>
   <main class="app">
-    <header>
-      <h1>Food Label Creator</h1>
-      <p class="subtitle">
-        Welcome to the Food Label Creator!
-        Follow the steps below to search for or create pet food labels.
-      </p>
-    </header>
-
     <!-- Main screen and message region -->
     <div id="screen"></div>
     <div id="toast" class="msg" role="status" aria-live="polite"></div>
   </main>
 
-  <!-- App scripts (order matters) -->
-  <?!= include('ui/js.api'); ?>
-  <?!= include('ui/js.scanner-bridge'); ?> <!-- Handles postMessage popup return -->
-  <?!= include('ui/js.app'); ?>
+  <!-- ────────────────────────────────────────────── -->
+  <!-- App Scripts (order matters!) -->
+  <!-- API must load FIRST so window.API is ready for js.app -->
+  <!-- ────────────────────────────────────────────── -->
+  <?!= include('ui/js.api.html'); ?> <!-- Defines global window.API -->
+  <?!= include('ui/js.scanner-bridge'); ?> <!-- Handles postMessage from scanner -->
+  <?!= include('ui/js.app'); ?> <!-- Main app controller (uses window.API) -->
 
+  <!-- ────────────────────────────────────────────── -->
   <!-- UI Views -->
+  <!-- ────────────────────────────────────────────── -->
   <?!= include('ui/view.launch'); ?>
   <?!= include('ui/view.results'); ?>
   <?!= include('ui/view.new'); ?>

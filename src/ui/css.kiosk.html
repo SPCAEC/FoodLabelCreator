@@ -1,12 +1,12 @@
 <style>
 :root {
   --bg: #fff;
-  --fg: #0f172a;
-  --muted: #475569;
-  --accent: #0ea5e9;
-  --accent-hover: #0284c7;
-  --success: #16a34a;
-  --danger: #dc2626;
+  --fg: #4e5b31;
+  --muted: #5c6675;
+  --accent: #512a44;
+  --accent-hover: #7b3e69;
+  --success: #4e5b31;
+  --danger: #be6a14;
   --ring: 0 0 0 3px rgba(14, 165, 233, 0.35);
 
   --base: 26px;
@@ -34,20 +34,28 @@ body {
   line-height: 1.5;
 }
 
+.hint {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+  margin-bottom: 0.75rem; /* adds space before the blue button */
+  line-height: 1.3;
+}
+
 /* ───────────── Layout ───────────── */
 .app {
   width: 100%;
   max-width: none;
   margin: 0;
-  padding: 0 1rem 2.5rem;
+  padding: 0 1rem 1.25rem;
 }
 header {
-  padding: 0.5rem 0 0 0;
+  padding: 0.25rem 0 0.25 0;
   margin-bottom: 0;
 }
 h1 {
   font-size: calc(var(--heading) / var(--base) * 1rem);
-  margin: 0.25rem 0;
+   margin: 0.2rem 0 0.1rem 0;
   line-height: 1.2;
 }
 .subtitle {

@@ -1,11 +1,5 @@
 <script>
-/**
- * Client wrapper for google.script.run → backend RPCs
- * Updated November 2025 for:
- *  ✅ Correct unwrapping of rpcTry({ ok, data }) responses
- *  ✅ PFP-prefixed UPC normalization
- *  ✅ Backward-compatible AI extraction and label creation
- */
+console.log('[API FILE IDENT]', 'js.api.html loaded at', new Date().toISOString());
 (function () {
   // ────────────────────────────────────────────────
   // Base GSR wrapper (Promise-based)
@@ -14,8 +8,14 @@
     return new Promise((resolve, reject) => {
       try {
         google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(reject)[method](...args);
+          .withSuccessHandler((res) => {
+            console.log('[GSR SUCCESS RAW]', JSON.stringify(res));
+            resolve(res);
+          })
+          .withFailureHandler((err) => {
+            console.error('[GSR FAILURE]', err);
+            reject(err);
+          })[method](...args);
       } catch (err) {
         console.error('[API] google.script.run error', err);
         reject(err);
@@ -28,12 +28,12 @@
   // ────────────────────────────────────────────────
   function normalizeUPC(raw) {
     let s = String(raw || '').replace(/\D/g, '');
-    if (s.length === 13 && s.startsWith('0')) s = s.slice(1); // EAN-13 → 12
+    if (s.length === 13 && s.startsWith('0')) s = s.slice(1);
     if (s.length > 13) return '';
     if (s.length < 12) s = s.padStart(12, '0');
     return s;
   }
-  const toSheetKey = upc12 => (upc12 ? `PFP${upc12}` : '');
+  const toSheetKey = (upc12) => (upc12 ? `PFP${upc12}` : '');
 
   // ────────────────────────────────────────────────
   // Image helpers
@@ -53,10 +53,6 @@
   // Public API
   // ────────────────────────────────────────────────
   const API = {
-    /**
-     * Lookup by UPC
-     * Always unwraps rpcTry → { found, item } shape
-     */
     lookup(raw) {
       const upc = normalizeUPC(raw);
       if (upc.length !== 12) {
@@ -66,60 +62,42 @@
       const key = toSheetKey(upc);
       console.log('[API.lookup] Sending lookup for', key);
 
-      return _gsr('apiLookup', { upc }).then(res => {
+      return _gsr('apiLookupWrapped', { upc }).then((res) => {
         console.log('[API.lookup result]', res);
-
-        // Always unwrap rpcTry({ ok, data })
         if (res && res.ok && res.data) return res.data;
-
-        // Fallback if somehow direct object is returned
         if (res && res.found !== undefined) return res;
-
         return { found: false, reason: 'unexpected_format', raw: res };
       });
     },
 
-    /**
-     * Create or update a label record
-     * Tries apiCreateLabels, falls back to apiSaveAndCreateLabel
-     */
     createLabels(payload) {
-      return _gsr('apiCreateLabels', payload)
-        .catch(() => _gsr('apiSaveAndCreateLabel', payload));
+      return _gsr('apiCreateLabels', payload).catch(() =>
+        _gsr('apiSaveAndCreateLabel', payload)
+      );
     },
 
-    /** Uploads a front image (base64 DataURL) */
     uploadFront(upc, dataUrl) {
       const n = normalizeUPC(upc);
       return _gsr('apiUploadFront', n, dataUrl);
     },
 
-    /** Uploads an ingredients image (base64 DataURL) */
     uploadIngredients(upc, dataUrl) {
       const n = normalizeUPC(upc);
       return _gsr('apiUploadIngredients', n, dataUrl);
     },
 
-    /**
-     * Extract label data from images
-     * Supports:
-     *  - extract(frontDataUrl, ingredientsDataUrl)
-     *  - extract({ frontDataUrl, ingDataUrl })
-     */
     extract(a, b) {
       if (arguments.length === 1 && a && typeof a === 'object') {
         const front = pickImageFromPayload(a, true) || null;
         const ingredients = pickImageFromPayload(a, false) || null;
         return _gsr('apiExtractFromImages', { front, ingredients });
       }
-
       const frontArg = typeof a === 'string' ? a : null;
       const ingArg = typeof b === 'string' ? b : null;
       return _gsr('apiExtractFromImages', { front: frontArg, ingredients: ingArg });
-    }
+    },
   };
 
-  // Expose globally
   window.API = API;
 })();
 </script>

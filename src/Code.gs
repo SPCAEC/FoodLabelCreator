@@ -22,7 +22,9 @@ function doGet() {
  * HTML templating include helper.
  */
 function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  const file = HtmlService.createHtmlOutputFromFile(filename);
+  const content = file.getContent();
+  return content;  // ✅ returns raw HTML including <script> tags
 }
 
 /* -------------------- UPC utils -------------------- */

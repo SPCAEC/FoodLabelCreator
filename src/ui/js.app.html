@@ -119,6 +119,20 @@
 
     // 🧭 Navigate back to launch screen
     navigate('screenLaunch');
+    // Clear image previews and hide sections
+    ['#frontPreview', '#ingredientsPreview'].forEach(sel => {
+      const img = document.querySelector(sel);
+      if (img) {
+        img.src = '';
+        img.classList.add('hidden');
+      }
+    });
+
+    // Re-hide the ingredients and continue sections
+    ['#ingredientsBlock', '#photoActions'].forEach(sel => {
+      const el = document.querySelector(sel);
+      if (el) el.classList.add('hidden');
+    });
     setTimeout(() => smoothScroll($('#screenLaunch'), 'start'), 100);
 
     // 🚫 Hide all Start Over buttons again
@@ -269,15 +283,13 @@
   }
 
   function formatDateFromSheet(date) {
-    try {
-      const d = new Date(date);
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      return `${mm}/${dd}/${yyyy}`;
-    } catch {
-      return '';
-    }
+    if (!date) return '';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return ''; // skip invalid dates
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
   }
 
   // ──────────────────────────────────────────────────────────────
@@ -530,12 +542,23 @@
   // ──────────────────────────────────────────────────────────────
   // Boot
   // ──────────────────────────────────────────────────────────────
-  document.addEventListener('DOMContentLoaded', () => {
-    wireGlobal();
-    wireLaunch();
-    wireNewItem();
-    wireReviewScreen();
-    navigate('screenLaunch');
+  window.addEventListener('DOMContentLoaded', () => {
+    (function waitForAPI(start = Date.now()) {
+      if (window.API && typeof API.lookup === 'function') {
+        console.log('✅ API ready', Object.keys(API));
+        wireGlobal();
+        wireLaunch();
+        wireNewItem();
+        wireReviewScreen();
+        navigate('screenLaunch');
+        return;
+      }
+      if (Date.now() - start > 5000) {
+        console.error('API never loaded within 5s');
+        return;
+      }
+      setTimeout(() => waitForAPI(start), 50);
+    })();
   });
 })();
 </script>

@@ -1,29 +1,17 @@
-/** ---------------------------------------------------------------------------
- * Pantry Label Generator – UI-facing RPCs (OpenAI, PDF, Sheet integration)
- * Unified version — Nov 2025
- * ✅ Ensures all RPCs return serialized objects (no nulls)
- * ✅ Merges lookup + wrapper into one exported function
- * ✅ Fully aligned with PFP-prefixed UPC key model
- * ---------------------------------------------------------------------------
- */
-
-/* ---------- Safe wrapper ---------- */
 function rpcTry(fn) {
   try {
     const result = fn();
-    return { ok: true, data: result };
+    console.log('[rpcTry RETURN TEST]', JSON.stringify(result)); // 👈 add this
+    return { ok: true, data: result ?? null };
   } catch (err) {
-    console.error({
-      level: 'error',
-      msg: 'rpc error',
-      error: err.toString(),
-      stack: err.stack,
-    });
-    return { ok: false, error: err.toString() };
+    console.error('[rpcTry ERROR]', err);
+    return {
+      ok: false,
+      error: String(err && err.message ? err.message : err),
+      stack: err && err.stack ? String(err.stack) : ''
+    };
   }
 }
-
-/* ---------- Core Lookup (wrapped + exported) ---------- */
 function apiLookup(payload) {
   return rpcTry(() => {
     const raw =
@@ -33,24 +21,21 @@ function apiLookup(payload) {
 
     const upc12 = normalizeUPC12_(raw);
     const key = toSheetKey_(upc12);
-    console.log(`[LOOKUP] Searching for ${key} (raw=${raw})`);
 
     // Try PFP-prefixed key first
     const record = readByKey(key);
     if (record) {
-      console.log(`[LOOKUP] ✅ Found record for ${key}`);
+      // Remove any stored expiration before returning to the client
+      if (record && 'expiration' in record) record.expiration = '';
       return { found: true, upc: upc12, key, item: record };
     }
 
     // Fallback: legacy 12-digit UPCs
     const legacyRow = findRowByKeyOrLegacy_(upc12);
     if (legacyRow !== -1) {
-      console.log(`[LOOKUP] Found legacy row ${legacyRow}.`);
       const sh = sh_();
       const h = getHeaders_();
-      const rowVals = sh
-        .getRange(legacyRow, 1, 1, sh.getLastColumn())
-        .getValues()[0];
+      const rowVals = sh.getRange(legacyRow, 1, 1, sh.getLastColumn()).getValues()[0];
       const val = (k) => rowVals[h[k] - 1] ?? '';
       const recordLegacy = {
         upcKey: val('UPC'),
@@ -69,9 +54,14 @@ function apiLookup(payload) {
       return { found: true, upc: upc12, key, item: recordLegacy };
     }
 
-    console.log(`[LOOKUP] ❌ No record found for ${key}`);
+    // Not found
     return { found: false, upc: upc12, key, reason: 'not_found' };
   });
+}
+function apiLookupWrapped(payload) {
+  const result = apiLookup(payload);
+  // Ensure plain JSON (not Apps Script object)
+  return JSON.parse(JSON.stringify(result));
 }
 
 /* ---------- Create / Save ---------- */

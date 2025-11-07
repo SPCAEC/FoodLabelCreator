@@ -1,6 +1,3 @@
-/** Sheets read/write for UPC database — November 2025 (PFP-prefixed key model) */
-
-/** Open the target sheet */
 function sh_() {
   return SpreadsheetApp.openById(CFG.SHEET_ID).getSheetByName(CFG.SHEET_NAME);
 }
